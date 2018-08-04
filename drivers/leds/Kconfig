@@ -537,7 +537,7 @@ config LEDS_NETXBIG
 	depends on MACH_KIRKWOOD
 	default y
 	help
-	  This option enable support for LEDs found on the LaCie 2Big
+	  This option enables support for LEDs found on the LaCie 2Big
 	  and 5Big Network v2 boards. The LEDs are wired to a CPLD and are
 	  controlled through a GPIO extension bus.
 
@@ -667,7 +667,7 @@ config LEDS_SYSCON
 	depends on MFD_SYSCON
 	depends on OF
 	help
-	  This option enabled support for the LEDs on syscon type
+	  This option enables support for the LEDs on syscon type
 	  devices. This will only work with device tree enabled
 	  devices.
 
@@ -681,11 +681,20 @@ config LEDS_PM8058
 
 config LEDS_MLXCPLD
 	tristate "LED support for the Mellanox boards"
-	depends on X86_64 && DMI
+	depends on X86 && DMI
 	depends on LEDS_CLASS
 	help
-	  This option enabled support for the LEDs on the Mellanox
-	  boards. Say Y to enabled these.
+	  This option enables support for the LEDs on the Mellanox
+	  boards. Say Y to enable these.
+
+config LEDS_MLXREG
+	tristate "LED support for the Mellanox switches management control"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for the LEDs on the Mellanox Ethernet and
+	  InfiniBand switches. The driver can be activated by the platform device
+	  device add call. Say Y to enable these. To compile this driver as a
+	  module, choose 'M' here: the module will be called leds-mlxreg.
 
 config LEDS_USER
 	tristate "Userspace LED support"
