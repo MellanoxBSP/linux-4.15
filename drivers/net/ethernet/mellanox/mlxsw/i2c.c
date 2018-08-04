@@ -53,14 +53,20 @@ static const char mlxsw_i2c_driver_name[] = "mlxsw_i2c";
 #define MLXSW_I2C_CIR2_OFF_STATUS	(MLXSW_I2C_CIR2_BASE + \
 					 MLXSW_I2C_CIR_STATUS_OFF)
 #define MLXSW_I2C_OPMOD_SHIFT		12
+#define MLXSW_I2C_EVENT_BIT_SHIFT	22
 #define MLXSW_I2C_GO_BIT_SHIFT		23
 #define MLXSW_I2C_CIR_CTRL_STATUS_SHIFT	24
+#define MLXSW_I2C_EVENT_BIT		BIT(MLXSW_I2C_EVENT_BIT_SHIFT)
 #define MLXSW_I2C_GO_BIT		BIT(MLXSW_I2C_GO_BIT_SHIFT)
 #define MLXSW_I2C_GO_OPMODE		BIT(MLXSW_I2C_OPMOD_SHIFT)
 #define MLXSW_I2C_SET_IMM_CMD		(MLXSW_I2C_GO_OPMODE | \
 					 MLXSW_CMD_OPCODE_QUERY_FW)
 #define MLXSW_I2C_PUSH_IMM_CMD		(MLXSW_I2C_GO_BIT | \
 					 MLXSW_I2C_SET_IMM_CMD)
+#define MLXSW_I2C_SET_EVENT_CMD		(MLXSW_I2C_EVENT_BIT | \
+					 MLXSW_CMD_OPCODE_QUERY_FW)
+#define MLXSW_I2C_PUSH_EVENT_CMD	(MLXSW_I2C_GO_BIT | \
+					 MLXSW_I2C_SET_EVENT_CMD)
 #define MLXSW_I2C_SET_CMD		(MLXSW_CMD_OPCODE_ACCESS_REG)
 #define MLXSW_I2C_PUSH_CMD		(MLXSW_I2C_GO_BIT | MLXSW_I2C_SET_CMD)
 #define MLXSW_I2C_TLV_HDR_SIZE		0x10
@@ -77,19 +83,24 @@ static const char mlxsw_i2c_driver_name[] = "mlxsw_i2c";
 #define MLXSW_I2C_BLK_MAX		32
 #define MLXSW_I2C_RETRY			5
 #define MLXSW_I2C_TIMEOUT_MSECS		5000
+#define MLXSW_I2C_CMD_MBOX_SIZE		256
+#define MLXSW_I2C_DWORD_MBOX_SIZE	(MLXSW_I2C_CMD_MBOX_SIZE % 4)
 
 /**
  * struct mlxsw_i2c - device private data:
+ @ @list: list of clients;
  * @cmd.mb_size_in: input mailbox size;
  * @cmd.mb_off_in: input mailbox offset in register space;
  * @cmd.mb_size_out: output mailbox size;
  * @cmd.mb_off_out: output mailbox offset in register space;
  * @cmd.lock: command execution lock;
  * @dev: I2C device;
+ * @client: I2C client;
  * @core: switch core pointer;
  * @bus_info: bus info block;
  */
 struct mlxsw_i2c {
+	struct list_head list;
 	struct {
 		u32 mb_size_in;
 		u32 mb_off_in;
@@ -98,9 +109,14 @@ struct mlxsw_i2c {
 		struct mutex lock;
 	} cmd;
 	struct device *dev;
+	struct i2c_client *client;
 	struct mlxsw_core *core;
 	struct mlxsw_bus_info bus_info;
 };
+
+static struct mlxsw_i2c_conf {
+	struct list_head list;
+} mlxsw_i2c_conf;
 
 #define MLXSW_I2C_READ_MSG(_client, _addr_buf, _buf, _len) {	\
 	{ .addr = (_client)->addr,				\
@@ -117,6 +133,11 @@ struct mlxsw_i2c {
 	  .buf = (u8 *)(_buf),					\
 	  .len = (_len),					\
 	  .flags = 0 }
+
+#define MLXSW_I2C_GET_BUS(id)	(((id) >> 8) & GENMASK(15, 0))
+#define MLXSW_I2C_GET_ADDR(id)	((id) & GENMASK(6, 0))
+#define MLXSW_I2C_GET_FW_REV(mj, mn, smn)			\
+			     ((u64)(mj) << 32 | (u64)(mn) << 16 | (smn))
 
 /* Routine converts in and out mail boxes offset and size. */
 static inline void
@@ -200,7 +221,7 @@ static int mlxsw_i2c_wait_go_bit(struct i2c_client *client,
 	return err > 0 ? 0 : err;
 }
 
-/* Routine posts a command to ASIC though mail box. */
+/* Routine posts a command to ASIC though mail box or in immmediate mode. */
 static int mlxsw_i2c_write_cmd(struct i2c_client *client,
 			       struct mlxsw_i2c *mlxsw_i2c,
 			       int immediate)
@@ -224,6 +245,49 @@ static int mlxsw_i2c_write_cmd(struct i2c_client *client,
 		push_cmd_buf[1] = cpu_to_be32(MLXSW_I2C_PUSH_CMD);
 		prep_cmd_buf[7] = cpu_to_be32(MLXSW_I2C_SET_CMD);
 	}
+	mlxsw_i2c_set_slave_addr((u8 *)prep_cmd_buf,
+				 MLXSW_I2C_CIR2_BASE);
+	mlxsw_i2c_set_slave_addr((u8 *)push_cmd_buf,
+				 MLXSW_I2C_CIR2_OFF_STATUS);
+
+	/* Prepare Command Interface Register for transaction */
+	err = i2c_transfer(client->adapter, &prep_cmd, 1);
+	if (err < 0)
+		return err;
+	else if (err != 1)
+		return -EIO;
+
+	/* Write out Command Interface Register GO bit to push transaction */
+	err = i2c_transfer(client->adapter, &push_cmd, 1);
+	if (err < 0)
+		return err;
+	else if (err != 1)
+		return -EIO;
+
+	return 0;
+}
+
+/* Routine posts a command to ASIC though mail box. */
+static int mlxsw_i2c_write_event_cmd(struct i2c_client *client,
+				     struct mlxsw_i2c *mlxsw_i2c)
+{
+	__be32 push_cmd_buf[MLXSW_I2C_PUSH_CMD_SIZE / 4] = {
+		0, cpu_to_be32(MLXSW_I2C_PUSH_EVENT_CMD)
+	};
+	__be32 prep_cmd_buf[MLXSW_I2C_PREP_SIZE / 4] = {
+		0, 0, 0, 0, 0, 0,
+		cpu_to_be32(client->adapter->nr & 0xffff),
+		cpu_to_be32(MLXSW_I2C_SET_EVENT_CMD)
+	};
+	struct i2c_msg push_cmd =
+		MLXSW_I2C_WRITE_MSG(client, push_cmd_buf,
+				    MLXSW_I2C_PUSH_CMD_SIZE);
+	struct i2c_msg prep_cmd =
+		MLXSW_I2C_WRITE_MSG(client, prep_cmd_buf, MLXSW_I2C_PREP_SIZE);
+	int err;
+
+	push_cmd_buf[1] = cpu_to_be32(MLXSW_I2C_PUSH_EVENT_CMD);
+	prep_cmd_buf[7] = cpu_to_be32(MLXSW_I2C_SET_EVENT_CMD);
 	mlxsw_i2c_set_slave_addr((u8 *)prep_cmd_buf,
 				 MLXSW_I2C_CIR2_BASE);
 	mlxsw_i2c_set_slave_addr((u8 *)push_cmd_buf,
@@ -438,6 +502,227 @@ static bool mlxsw_i2c_skb_transmit_busy(void *bus_priv,
 	return false;
 }
 
+static struct i2c_client *mlxsw_i2c_find_client(u32 id)
+{
+	struct mlxsw_i2c *mlxsw_i2c;
+	u16 bus;
+	u8 addr;
+
+	bus = MLXSW_I2C_GET_BUS(id);
+	addr = MLXSW_I2C_GET_ADDR(id);
+	list_for_each_entry(mlxsw_i2c, &mlxsw_i2c_conf.list, list) {
+		if (bus == mlxsw_i2c->client->adapter->nr &&
+		    addr == mlxsw_i2c->client->addr)
+			return mlxsw_i2c->client;
+	}
+	return NULL;
+}
+
+static int mlxsw_i2c_read_buf(struct mlxsw_i2c *mlxsw_i2c, int len, char *buf)
+{
+	unsigned long timeout = msecs_to_jiffies(MLXSW_I2C_TIMEOUT_MSECS);
+	u8 tran_buf[MLXSW_I2C_ADDR_BUF_SIZE];
+	struct i2c_msg read_tran[] =
+		MLXSW_I2C_READ_MSG(mlxsw_i2c->client, tran_buf, NULL, 0);
+	int off = mlxsw_i2c->cmd.mb_off_out;
+	int num, chunk_size, i, j;
+	unsigned long end;
+	int err;
+
+	num = len / MLXSW_I2C_BLK_MAX;
+	if (len % MLXSW_I2C_BLK_MAX)
+		num++;
+
+	if (mutex_lock_interruptible(&mlxsw_i2c->cmd.lock) < 0) {
+		dev_err(&mlxsw_i2c->client->dev, "Could not acquire lock");
+		return -EINVAL;
+	}
+
+	/* Send read transaction to get output mailbox content. */
+	read_tran[1].buf = buf;
+	for (i = 0; i < num; i++) {
+		chunk_size = (len > MLXSW_I2C_BLK_MAX) ?
+			     MLXSW_I2C_BLK_MAX : len;
+		read_tran[1].len = chunk_size;
+		mlxsw_i2c_set_slave_addr(tran_buf, off);
+
+		j = 0;
+		end = jiffies + timeout;
+		do {
+			err = i2c_transfer(mlxsw_i2c->client->adapter,
+					   read_tran, ARRAY_SIZE(read_tran));
+			if (err == ARRAY_SIZE(read_tran))
+				break;
+
+			cond_resched();
+		} while ((time_before(jiffies, end)) ||
+			 (j++ < MLXSW_I2C_RETRY));
+
+		if (err != ARRAY_SIZE(read_tran)) {
+			if (!err) {
+				err = -EIO;
+				goto fail;
+			}
+		}
+
+		off += chunk_size;
+		len -= chunk_size;
+		read_tran[1].buf += chunk_size;
+	}
+
+	mutex_unlock(&mlxsw_i2c->cmd.lock);
+
+	return 0;
+
+fail:
+	mutex_unlock(&mlxsw_i2c->cmd.lock);
+	return err;
+}
+
+static int mlxsw_i2c_write_buf(struct mlxsw_i2c *mlxsw_i2c, int len, char *buf)
+{
+	u8 status;
+	int num;
+	int err;
+
+	num = len / MLXSW_I2C_BLK_MAX;
+	if (len % MLXSW_I2C_BLK_MAX)
+		num++;
+
+	if (mutex_lock_interruptible(&mlxsw_i2c->cmd.lock) < 0) {
+		dev_err(&mlxsw_i2c->client->dev, "Could not acquire lock");
+		return -EINVAL;
+	}
+
+	err = mlxsw_i2c_write(&mlxsw_i2c->client->dev, len, buf, num, &status);
+	if (err)
+		goto fail;
+
+	mutex_unlock(&mlxsw_i2c->cmd.lock);
+
+	return 0;
+
+fail:
+	mutex_unlock(&mlxsw_i2c->cmd.lock);
+	return err;
+}
+
+static int mlxsw_i2c_write_hook(int i2c_dev_id, int off, int len, u8 *buf)
+{
+	struct mlxsw_i2c *mlxsw_i2c;
+	struct i2c_client *client;
+
+	client = mlxsw_i2c_find_client(i2c_dev_id);
+	if (!client)
+		return -EINVAL;
+
+	mlxsw_i2c = i2c_get_clientdata(client);
+
+	return mlxsw_i2c_write_buf(mlxsw_i2c, len, buf);
+}
+
+static int mlxsw_i2c_read_hook(int i2c_dev_id, int off, int len, u8 *buf)
+{
+	struct mlxsw_i2c *mlxsw_i2c;
+	struct i2c_client *client;
+
+	client = mlxsw_i2c_find_client(i2c_dev_id);
+	if (!client)
+		return -EINVAL;
+
+	mlxsw_i2c = i2c_get_clientdata(client);
+
+	return mlxsw_i2c_read_buf(mlxsw_i2c, len, buf);
+}
+
+static int mlxsw_i2c_write_dword_hook(int i2c_dev_id, int off, u32 val)
+{
+	return mlxsw_i2c_write_hook(i2c_dev_id, off, MLXSW_I2C_ADDR_WIDTH,
+				    (u8 *)(&val));
+}
+
+static int mlxsw_i2c_read_dword_hook(int i2c_dev_id, int off, u32 *val)
+{
+	return mlxsw_i2c_read_hook(i2c_dev_id, off, MLXSW_I2C_ADDR_WIDTH,
+				   (u8 *)(val));
+}
+
+static int mlxsw_i2c_get_local_mbox_hook(int i2c_dev_id, u32 *mb_size_in,
+					 u32 *mb_offset_in, u32 *mb_size_out,
+					 u32 *mb_offset_out)
+{
+	struct mlxsw_i2c *mlxsw_i2c;
+	struct i2c_client *client;
+
+	client = mlxsw_i2c_find_client(i2c_dev_id);
+	if (!client)
+		return -EINVAL;
+
+	mlxsw_i2c = i2c_get_clientdata(client);
+	*mb_size_in = mlxsw_i2c->cmd.mb_size_in;
+	*mb_offset_in = mlxsw_i2c->cmd.mb_off_in;
+	*mb_size_out = mlxsw_i2c->cmd.mb_size_out;
+	*mb_offset_out = mlxsw_i2c->cmd.mb_off_out;
+
+	return 0;
+}
+
+static int mlxsw_i2c_get_fw_rev_hook(int i2c_dev_id, u64 *fw_rev)
+{
+	struct mlxsw_i2c *mlxsw_i2c;
+	struct i2c_client *client;
+
+	client = mlxsw_i2c_find_client(i2c_dev_id);
+	if (!client)
+		return -EINVAL;
+
+	mlxsw_i2c = i2c_get_clientdata(client);
+	*fw_rev = MLXSW_I2C_GET_FW_REV(mlxsw_i2c->bus_info.fw_rev.major,
+				       mlxsw_i2c->bus_info.fw_rev.minor,
+				       mlxsw_i2c->bus_info.fw_rev.subminor);
+
+	return 0;
+}
+
+int i2c_write(int i2c_dev_id, int off, int len, u8 *buf)
+{
+	return mlxsw_i2c_write_hook(i2c_dev_id, off, len, buf);
+}
+EXPORT_SYMBOL(i2c_write);
+
+int i2c_read(int i2c_dev_id, int off, int len, u8 *buf)
+{
+	return mlxsw_i2c_read_hook(i2c_dev_id, off, len, buf);
+}
+EXPORT_SYMBOL(i2c_read);
+
+int i2c_write_dword(int i2c_dev_id, int off, u32 val)
+{
+	return mlxsw_i2c_write_dword_hook(i2c_dev_id, off, val);
+}
+EXPORT_SYMBOL(i2c_write_dword);
+
+int i2c_read_dword(int i2c_dev_id, int off, u32 *val)
+{
+	return mlxsw_i2c_read_dword_hook(i2c_dev_id, off, val);
+}
+EXPORT_SYMBOL(i2c_read_dword);
+
+int i2c_get_local_mbox(int i2c_dev_id, u32 *mb_size_in, u32 *mb_offset_in,
+		       u32 *mb_size_out, u32 *mb_offset_out)
+{
+	return mlxsw_i2c_get_local_mbox_hook(i2c_dev_id, mb_size_in,
+					     mb_offset_in, mb_size_out,
+					     mb_offset_out);
+}
+EXPORT_SYMBOL(i2c_get_local_mbox);
+
+int i2c_get_fw_rev(int i2c_dev_id, u64 *fw_rev)
+{
+	return mlxsw_i2c_get_fw_rev_hook(i2c_dev_id, fw_rev);
+}
+EXPORT_SYMBOL(i2c_get_fw_rev);
+
 static int mlxsw_i2c_skb_transmit(void *bus_priv, struct sk_buff *skb,
 				  const struct mlxsw_tx_info *tx_info)
 {
@@ -475,6 +760,10 @@ static const struct mlxsw_bus mlxsw_i2c_bus = {
 static int mlxsw_i2c_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
+	union mailbox {
+		u32 dw[MLXSW_I2C_DWORD_MBOX_SIZE];
+		u8 b[MLXSW_I2C_CMD_MBOX_SIZE];
+	} mbox;
 	struct mlxsw_i2c *mlxsw_i2c;
 	u8 status;
 	int err;
@@ -537,6 +826,7 @@ static int mlxsw_i2c_probe(struct i2c_client *client,
 	mlxsw_i2c->bus_info.device_name = client->name;
 	mlxsw_i2c->bus_info.dev = &client->dev;
 	mlxsw_i2c->dev = &client->dev;
+	mlxsw_i2c->client = client;
 
 	err = mlxsw_core_bus_device_register(&mlxsw_i2c->bus_info,
 					     &mlxsw_i2c_bus, mlxsw_i2c);
@@ -544,6 +834,45 @@ static int mlxsw_i2c_probe(struct i2c_client *client,
 		dev_err(&client->dev, "Fail to register core bus\n");
 		return err;
 	}
+
+	err = mlxsw_i2c_write_event_cmd(client, mlxsw_i2c);
+	if (err) {
+		dev_err(&client->dev, "Could not start transaction");
+		return -EIO;
+	}
+
+	/* Wait until go bit is cleared. */
+	err = mlxsw_i2c_wait_go_bit(client, mlxsw_i2c, &status);
+	if (err) {
+		dev_err(&client->dev, "HW semaphore is not released");
+		return err;
+	}
+
+	/* Validate transaction completion status. */
+	if (status) {
+		dev_err(&client->dev, "Bad transaction completion status %x\n",
+			status);
+		return -EIO;
+	}
+
+	err = mlxsw_i2c_read_buf(mlxsw_i2c, MLXSW_I2C_CMD_MBOX_SIZE, mbox.b);
+	if (err) {
+		dev_err(&client->dev, "Failed to read output mailbox");
+		return err;
+	}
+
+	mlxsw_i2c->bus_info.fw_rev.major =
+		mlxsw_cmd_mbox_query_fw_fw_rev_major_get(mbox.b);
+	mlxsw_i2c->bus_info.fw_rev.minor =
+		mlxsw_cmd_mbox_query_fw_fw_rev_minor_get(mbox.b);
+	mlxsw_i2c->bus_info.fw_rev.subminor =
+		mlxsw_cmd_mbox_query_fw_fw_rev_subminor_get(mbox.b);
+	dev_info(&client->dev,	"%s Firmware revision: %d.%d.%d\n", id->name,
+		 mlxsw_i2c->bus_info.fw_rev.major,
+		 mlxsw_i2c->bus_info.fw_rev.minor,
+		 mlxsw_i2c->bus_info.fw_rev.subminor);
+
+	list_add(&mlxsw_i2c->list, &mlxsw_i2c_conf.list);
 
 	return 0;
 
@@ -557,6 +886,8 @@ static int mlxsw_i2c_remove(struct i2c_client *client)
 {
 	struct mlxsw_i2c *mlxsw_i2c = i2c_get_clientdata(client);
 
+	if (!list_empty(&mlxsw_i2c_conf.list))
+		list_del_rcu(&mlxsw_i2c->list);
 	mlxsw_core_bus_device_unregister(mlxsw_i2c->core);
 	mutex_destroy(&mlxsw_i2c->cmd.lock);
 
@@ -567,6 +898,7 @@ int mlxsw_i2c_driver_register(struct i2c_driver *i2c_driver)
 {
 	i2c_driver->probe = mlxsw_i2c_probe;
 	i2c_driver->remove = mlxsw_i2c_remove;
+	INIT_LIST_HEAD(&mlxsw_i2c_conf.list);
 	return i2c_add_driver(i2c_driver);
 }
 EXPORT_SYMBOL(mlxsw_i2c_driver_register);
