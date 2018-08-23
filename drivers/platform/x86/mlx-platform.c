@@ -482,15 +482,6 @@ static struct mlxreg_core_data mlxplat_mlxcpld_default_asic_items_data[] = {
 	},
 };
 
-static struct mlxreg_core_data mlxplat_mlxcpld_default_db_items_data[] = {
-	{
-		.label = "doorbell",
-		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
-		.mask = BIT(2),
-		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
-	},
-};
-
 static struct mlxreg_core_item mlxplat_mlxcpld_default_items[] = {
 	{
 		.data = mlxplat_mlxcpld_default_psu_items_data,
@@ -528,15 +519,6 @@ static struct mlxreg_core_item mlxplat_mlxcpld_default_items[] = {
 		.inversed = 0,
 		.health = true,
 	},
-	{
-		.data = mlxplat_mlxcpld_default_db_items_data,
-		.aggr_mask = MLXPLAT_CPLD_AGGR_MASK_NG_DEF,
-		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
-		.mask = BIT(2),
-		.count = ARRAY_SIZE(mlxplat_mlxcpld_default_db_items_data),
-		.inversed = 1,
-		.health = false,
-	},
 };
 
 static
@@ -564,6 +546,15 @@ static struct mlxreg_core_data mlxplat_mlxcpld_msn21xx_pwr_items_data[] = {
 	},
 };
 
+static struct mlxreg_core_data mlxplat_mlxcpld_default_db_items_data[] = {
+	{
+		.label = "doorbell",
+		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
+		.mask = BIT(2),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+};
+
 /* Platform hotplug MSN21xx system family data */
 static struct mlxreg_core_item mlxplat_mlxcpld_msn21xx_items[] = {
 	{
@@ -583,6 +574,15 @@ static struct mlxreg_core_item mlxplat_mlxcpld_msn21xx_items[] = {
 		.count = ARRAY_SIZE(mlxplat_mlxcpld_default_asic_items_data),
 		.inversed = 0,
 		.health = true,
+	},
+	{
+		.data = mlxplat_mlxcpld_default_db_items_data,
+		.aggr_mask = MLXPLAT_CPLD_AGGR_MASK_NG_DEF,
+		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
+		.mask = BIT(2),
+		.count = ARRAY_SIZE(mlxplat_mlxcpld_default_db_items_data),
+		.inversed = 1,
+		.health = false,
 	},
 };
 

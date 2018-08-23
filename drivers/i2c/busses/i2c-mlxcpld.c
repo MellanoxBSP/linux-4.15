@@ -46,7 +46,9 @@
 #define MLXCPLD_I2C_BUS_NUM		1
 #define MLXCPLD_I2C_DATA_REG_SZ		36
 #define MLXCPLD_I2C_DATA_SZ_BIT		BIT(5)
+#define MLXCPLD_I2C_DATA_SZ_STAT_BIT	BIT(1)
 #define MLXCPLD_I2C_DATA_SZ_MASK	GENMASK(6, 5)
+#define MLXCPLD_I2C_DATA_SZ_STAT_MASK	GENMASK(2, 1)
 #define MLXCPLD_I2C_SMBUS_BLK_BIT	BIT(7)
 #define MLXCPLD_I2C_MAX_ADDR_LEN	4
 #define MLXCPLD_I2C_RETR_NUM		2
@@ -493,7 +495,7 @@ static int mlxcpld_i2c_probe(struct platform_device *pdev)
 {
 	struct mlxcpld_i2c_priv *priv;
 	int err;
-	u8 val;
+	u8 val, st;
 
 	priv = devm_kzalloc(&pdev->dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
@@ -509,8 +511,14 @@ static int mlxcpld_i2c_probe(struct platform_device *pdev)
 	/* Read capability register */
 	mlxcpld_i2c_read_comm(priv, MLXCPLD_LPCI2C_CPBLTY_REG, &val, 1);
 	/* Check support for extended transaction length */
-	if ((val & MLXCPLD_I2C_DATA_SZ_MASK) == MLXCPLD_I2C_DATA_SZ_BIT)
+	if ((val & MLXCPLD_I2C_DATA_SZ_MASK) == MLXCPLD_I2C_DATA_SZ_BIT) {
 		mlxcpld_i2c_adapter.quirks = &mlxcpld_i2c_quirks_ext;
+	} else {
+		mlxcpld_i2c_read_comm(priv, MLXCPLD_LPCI2C_STATUS_REG, &st, 1);
+		if ((st & MLXCPLD_I2C_DATA_SZ_STAT_MASK) ==
+		    MLXCPLD_I2C_DATA_SZ_STAT_MASK)
+			mlxcpld_i2c_adapter.quirks = &mlxcpld_i2c_quirks_ext;
+	}
 	/* Check support for smbus block transaction */
 	if (val & MLXCPLD_I2C_SMBUS_BLK_BIT)
 		priv->smbus_block = true;
