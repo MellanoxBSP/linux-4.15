@@ -86,6 +86,13 @@ static const char mlxsw_i2c_driver_name[] = "mlxsw_i2c";
 #define MLXSW_I2C_CMD_MBOX_SIZE		256
 #define MLXSW_I2C_DWORD_MBOX_SIZE	(MLXSW_I2C_CMD_MBOX_SIZE % 4)
 
+#define MLXSW_I2C_DEFAULT_MBOX_SIZE	0x100
+#define MLXSW_I2C_DEFAULT_IN_MBOX_OFF	0x84ee0
+#define MLXSW_I2C_DEFAULT_OUT_MBOX_OFF	0x84fe0
+#define MLXSW_I2C_DEFAULT_MAJOR_VER	11
+#define MLXSW_I2C_DEFAULT_MINOR_VER	1702
+#define MLXSW_I2C_DEFAULT_SUBMINOR_VER	12
+
 /**
  * struct mlxsw_i2c - device private data:
  @ @list: list of clients;
@@ -518,13 +525,13 @@ static struct i2c_client *mlxsw_i2c_find_client(u32 id)
 	return NULL;
 }
 
-static int mlxsw_i2c_read_buf(struct mlxsw_i2c *mlxsw_i2c, int len, char *buf)
+static int
+mlxsw_i2c_read_buf(struct mlxsw_i2c *mlxsw_i2c, int off, int len, char *buf)
 {
 	unsigned long timeout = msecs_to_jiffies(MLXSW_I2C_TIMEOUT_MSECS);
 	u8 tran_buf[MLXSW_I2C_ADDR_BUF_SIZE];
 	struct i2c_msg read_tran[] =
 		MLXSW_I2C_READ_MSG(mlxsw_i2c->client, tran_buf, NULL, 0);
-	int off = mlxsw_i2c->cmd.mb_off_out;
 	int num, chunk_size, i, j;
 	unsigned long end;
 	int err;
@@ -579,9 +586,16 @@ fail:
 	return err;
 }
 
-static int mlxsw_i2c_write_buf(struct mlxsw_i2c *mlxsw_i2c, int len, char *buf)
+static int
+mlxsw_i2c_write_buf(struct mlxsw_i2c *mlxsw_i2c, int off, int len, char *buf)
 {
-	u8 status;
+	unsigned long timeout = msecs_to_jiffies(MLXSW_I2C_TIMEOUT_MSECS);
+	u8 tran_buf[MLXSW_I2C_MAX_BUFF_SIZE + MLXSW_I2C_ADDR_BUF_SIZE];
+	struct i2c_msg write_tran =
+		MLXSW_I2C_WRITE_MSG(mlxsw_i2c->client, tran_buf,
+				    MLXSW_I2C_PUSH_CMD_SIZE);
+	int chunk_size, i, j;
+	unsigned long end;
 	int num;
 	int err;
 
@@ -594,9 +608,36 @@ static int mlxsw_i2c_write_buf(struct mlxsw_i2c *mlxsw_i2c, int len, char *buf)
 		return -EINVAL;
 	}
 
-	err = mlxsw_i2c_write(&mlxsw_i2c->client->dev, len, buf, num, &status);
-	if (err)
-		goto fail;
+	/* Send write transaction to set input mailbox content. */
+	for (i = 0; i < num; i++) {
+		chunk_size = (len > MLXSW_I2C_BLK_MAX) ?
+			     MLXSW_I2C_BLK_MAX : len;
+		write_tran.len = MLXSW_I2C_ADDR_WIDTH + chunk_size;
+		mlxsw_i2c_set_slave_addr(tran_buf, off);
+		memcpy(&tran_buf[MLXSW_I2C_ADDR_BUF_SIZE], buf +
+		       MLXSW_I2C_BLK_MAX * i, chunk_size);
+
+		j = 0;
+		end = jiffies + timeout;
+		do {
+			err = i2c_transfer(mlxsw_i2c->client->adapter,
+					   &write_tran, 1);
+			if (err == 1)
+				break;
+
+			cond_resched();
+		} while ((time_before(jiffies, end)) ||
+			 (j++ < MLXSW_I2C_RETRY));
+
+		if (err != 1) {
+			if (!err)
+				err = -EIO;
+			goto fail;
+		}
+
+		off += chunk_size;
+		len -= chunk_size;
+	}
 
 	mutex_unlock(&mlxsw_i2c->cmd.lock);
 
@@ -618,7 +659,7 @@ static int mlxsw_i2c_write_hook(int i2c_dev_id, int off, int len, u8 *buf)
 
 	mlxsw_i2c = i2c_get_clientdata(client);
 
-	return mlxsw_i2c_write_buf(mlxsw_i2c, len, buf);
+	return mlxsw_i2c_write_buf(mlxsw_i2c, off, len, buf);
 }
 
 static int mlxsw_i2c_read_hook(int i2c_dev_id, int off, int len, u8 *buf)
@@ -632,7 +673,7 @@ static int mlxsw_i2c_read_hook(int i2c_dev_id, int off, int len, u8 *buf)
 
 	mlxsw_i2c = i2c_get_clientdata(client);
 
-	return mlxsw_i2c_read_buf(mlxsw_i2c, len, buf);
+	return mlxsw_i2c_read_buf(mlxsw_i2c, off, len, buf);
 }
 
 static int mlxsw_i2c_write_dword_hook(int i2c_dev_id, int off, u32 val)
@@ -686,24 +727,36 @@ static int mlxsw_i2c_get_fw_rev_hook(int i2c_dev_id, u64 *fw_rev)
 
 int i2c_write(int i2c_dev_id, int off, int len, u8 *buf)
 {
+	if (!IS_REACHABLE(CONFIG_MLX_PLATFORM))
+		return 0;
+
 	return mlxsw_i2c_write_hook(i2c_dev_id, off, len, buf);
 }
 EXPORT_SYMBOL(i2c_write);
 
 int i2c_read(int i2c_dev_id, int off, int len, u8 *buf)
 {
+	if (!IS_REACHABLE(CONFIG_MLX_PLATFORM))
+		return 0;
+
 	return mlxsw_i2c_read_hook(i2c_dev_id, off, len, buf);
 }
 EXPORT_SYMBOL(i2c_read);
 
 int i2c_write_dword(int i2c_dev_id, int off, u32 val)
 {
+	if (!IS_REACHABLE(CONFIG_MLX_PLATFORM))
+		return 0;
+
 	return mlxsw_i2c_write_dword_hook(i2c_dev_id, off, val);
 }
 EXPORT_SYMBOL(i2c_write_dword);
 
 int i2c_read_dword(int i2c_dev_id, int off, u32 *val)
 {
+	if (!IS_REACHABLE(CONFIG_MLX_PLATFORM))
+		return 0;
+
 	return mlxsw_i2c_read_dword_hook(i2c_dev_id, off, val);
 }
 EXPORT_SYMBOL(i2c_read_dword);
@@ -711,6 +764,15 @@ EXPORT_SYMBOL(i2c_read_dword);
 int i2c_get_local_mbox(int i2c_dev_id, u32 *mb_size_in, u32 *mb_offset_in,
 		       u32 *mb_size_out, u32 *mb_offset_out)
 {
+	if (!IS_REACHABLE(CONFIG_MLX_PLATFORM)) {
+		*mb_size_in = MLXSW_I2C_DEFAULT_MBOX_SIZE;
+		*mb_offset_in = MLXSW_I2C_DEFAULT_IN_MBOX_OFF;
+		*mb_size_out = MLXSW_I2C_DEFAULT_MBOX_SIZE;
+		*mb_offset_out = MLXSW_I2C_DEFAULT_OUT_MBOX_OFF;
+
+		return 0;
+	}
+
 	return mlxsw_i2c_get_local_mbox_hook(i2c_dev_id, mb_size_in,
 					     mb_offset_in, mb_size_out,
 					     mb_offset_out);
@@ -719,9 +781,29 @@ EXPORT_SYMBOL(i2c_get_local_mbox);
 
 int i2c_get_fw_rev(int i2c_dev_id, u64 *fw_rev)
 {
+	if (!IS_REACHABLE(CONFIG_MLX_PLATFORM)) {
+		*fw_rev = MLXSW_I2C_GET_FW_REV(MLXSW_I2C_DEFAULT_MAJOR_VER,
+					       MLXSW_I2C_DEFAULT_MINOR_VER,
+					       MLXSW_I2C_DEFAULT_SUBMINOR_VER);
+
+		return 0;
+	}
+
 	return mlxsw_i2c_get_fw_rev_hook(i2c_dev_id, fw_rev);
 }
 EXPORT_SYMBOL(i2c_get_fw_rev);
+
+int i2c_enforce(int i2c_dev_id)
+{
+	return 0;
+}
+EXPORT_SYMBOL(i2c_enforce);
+
+int i2c_release(int i2c_dev_id)
+{
+	return 0;
+}
+EXPORT_SYMBOL(i2c_release);
 
 static int mlxsw_i2c_skb_transmit(void *bus_priv, struct sk_buff *skb,
 				  const struct mlxsw_tx_info *tx_info)
@@ -855,7 +937,8 @@ static int mlxsw_i2c_probe(struct i2c_client *client,
 		return -EIO;
 	}
 
-	err = mlxsw_i2c_read_buf(mlxsw_i2c, MLXSW_I2C_CMD_MBOX_SIZE, mbox.b);
+	err = mlxsw_i2c_read_buf(mlxsw_i2c, mlxsw_i2c->cmd.mb_off_out,
+				 MLXSW_I2C_CMD_MBOX_SIZE, mbox.b);
 	if (err) {
 		dev_err(&client->dev, "Failed to read output mailbox");
 		return err;
