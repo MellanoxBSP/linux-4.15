@@ -37,13 +37,16 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
+#include <net/genetlink.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
 #include <linux/platform_data/mlxreg.h>
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
+#include <linux/refcount.h>
 #include <linux/regmap.h>
 #include <linux/workqueue.h>
+#include <uapi/linux/mlxreg.h>
 
 /* Offset of event and mask registers from status register. */
 #define MLXREG_HOTPLUG_EVENT_OFF	1
@@ -53,7 +56,7 @@
 /* ASIC good health mask. */
 #define MLXREG_HOTPLUG_GOOD_HEALTH_MASK	0x02
 
-#define MLXREG_HOTPLUG_ATTRS_MAX	24
+#define MLXREG_HOTPLUG_ATTRS_MAX	100
 #define MLXREG_HOTPLUG_NOT_ASSERT	3
 
 /**
@@ -75,6 +78,8 @@
  * @aggr_cache: last value of aggregation register status;
  * @after_probe: flag indication probing completion;
  * @not_asserted: number of entries in workqueue with no signal assertion;
+ * @sk: netlink socket;
+ * @id: socket listener process id;
  */
 struct mlxreg_hotplug_priv_data {
 	int irq;
@@ -95,12 +100,147 @@ struct mlxreg_hotplug_priv_data {
 	u32 aggr_cache;
 	bool after_probe;
 	u8 not_asserted;
+	struct sock *sk;
+	unsigned int id;
 };
+
+/**
+ * struct mlxreg_hotplug_netlink_data - netlink control data:
+ * @sk: netlink socket;
+ * @pid: socket listener process id;
+ * @seq: event sequence number;
+ * @refcnt: reference counter;
+ */
+struct mlxreg_hotplug_netlink_data {
+	struct sock *sk;
+	unsigned int pid;
+	unsigned int seq;
+	refcount_t refcnt;
+};
+
+static struct mlxreg_hotplug_netlink_data mlxreg_hotplug_nl = {
+	.refcnt = REFCOUNT_INIT(0),
+};
+
+static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
+{
+	struct mlxreg_hotplug_event *msg;
+	struct nlmsghdr *nlh;
+
+	nlh = nlmsg_hdr(skb);
+	if (!NLMSG_OK(nlh, skb->len)) {
+		pr_err("Received corrupted netlink message len = %d\n",
+		       skb->len);
+		return;
+	}
+
+	switch (nlh->nlmsg_type) {
+	case MLXREG_NL_REGISTER:
+		if (mlxreg_hotplug_nl.pid)
+			return;
+		msg = (struct mlxreg_hotplug_event *)NLMSG_DATA(nlh);
+		mlxreg_hotplug_nl.pid = nlh->nlmsg_pid;
+		break;
+	case MLXREG_NL_UNREGISTER:
+		if (refcount_read(&mlxreg_hotplug_nl.refcnt) > 1)
+			return;
+		mlxreg_hotplug_nl.pid = 0;
+		break;
+	default:
+		pr_err("Received unknown netlink message type %d\n",
+		       nlh->nlmsg_type);
+			break;
+	}
+}
+
+static int mlxreg_hotplug_nl_init_once(void)
+{
+	struct netlink_kernel_cfg cfg = {
+		.input	= mlxreg_hotplug_receive_nl_msg,
+	};
+
+	if (IS_REACHABLE(CONFIG_NET) &&
+	    !refcount_read(&mlxreg_hotplug_nl.refcnt)) {
+		mlxreg_hotplug_nl.sk = netlink_kernel_create(&init_net,
+							     NETLINK_USERSOCK,
+							     &cfg);
+		if (!mlxreg_hotplug_nl.sk)
+			return -ENOMEM;
+	}
+
+	refcount_inc(&mlxreg_hotplug_nl.refcnt);
+
+	return 0;
+}
+
+static void mlxreg_hotplug_nl_release_once(void)
+{
+	refcount_dec(&mlxreg_hotplug_nl.refcnt);
+
+	if (IS_REACHABLE(CONFIG_NET) &&
+	    !refcount_read(&mlxreg_hotplug_nl.refcnt)) {
+		netlink_kernel_release(mlxreg_hotplug_nl.sk);
+	}
+}
+
+static int
+mlxreg_hotplug_generate_netlink_event(struct mlxreg_hotplug_priv_data *priv,
+				      struct mlxreg_core_data *data,
+				      bool event)
+{
+	struct mlxreg_core_hotplug_platform_data *pdata;
+	struct mlxreg_hotplug_event *mlxreg_hotplug_event;
+	struct nlmsghdr *nlh;
+	struct sk_buff *skb;
+	int size;
+	int res;
+
+	if (!data)
+		return -EINVAL;
+
+	pdata = dev_get_platdata(&priv->pdev->dev);
+	if (!data)
+		return -EINVAL;
+
+	if (!mlxreg_hotplug_nl.pid)
+		return 0;
+
+	/* Allocate memory for netlink message. */
+	size = nla_total_size(sizeof(*mlxreg_hotplug_event)) +
+	       nla_total_size(0);
+	skb = nlmsg_new(size, GFP_ATOMIC);
+	if (!skb)
+		return -ENOMEM;
+
+	nlh = nlmsg_put(skb, mlxreg_hotplug_nl.pid, mlxreg_hotplug_nl.seq++,
+			MLXREG_NL_EVENT, sizeof(*mlxreg_hotplug_event), 0);
+	if (!nlh)
+		return -ENOMEM;
+	mlxreg_hotplug_event = nlmsg_data(nlh);
+	memset(mlxreg_hotplug_event, 0, sizeof(*mlxreg_hotplug_event));
+	sprintf(mlxreg_hotplug_event->label, "%s", data->label);
+	mlxreg_hotplug_event->nr = priv->pdev->id;
+	mlxreg_hotplug_event->event = event;
+	nlmsg_end(skb, nlh);
+	res = netlink_unicast(mlxreg_hotplug_nl.sk, skb, mlxreg_hotplug_nl.pid,
+			      MSG_DONTWAIT);
+
+	return res;
+}
 
 static int mlxreg_hotplug_device_create(struct mlxreg_hotplug_priv_data *priv,
 					struct mlxreg_core_data *data)
 {
 	struct mlxreg_core_hotplug_platform_data *pdata;
+	int res;
+
+	/* Send hotplug event. */
+	if (IS_REACHABLE(CONFIG_NET)) {
+		res = mlxreg_hotplug_generate_netlink_event(priv, data, true);
+		if (res < 0)
+			dev_err(priv->dev, "Failed to send netlink event:%d",
+				res);
+	}
 
 	/* Notify user by sending hwmon uevent. */
 	kobject_uevent(&priv->hwmon->kobj, KOBJ_CHANGE);
@@ -140,6 +280,16 @@ static void
 mlxreg_hotplug_device_destroy(struct mlxreg_hotplug_priv_data *priv,
 			      struct mlxreg_core_data *data)
 {
+	int res;
+
+	/* Send hotplug event. */
+	if (IS_REACHABLE(CONFIG_NET)) {
+		res = mlxreg_hotplug_generate_netlink_event(priv, data, false);
+		if (res < 0)
+			dev_err(priv->dev, "Failed to send netlink event:%d",
+				res);
+	}
+
 	/* Notify user by sending hwmon uevent. */
 	kobject_uevent(&priv->hwmon->kobj, KOBJ_CHANGE);
 
@@ -205,6 +355,7 @@ static int mlxreg_hotplug_attr_init(struct mlxreg_hotplug_priv_data *priv)
 	for (i = 0; i < pdata->counter; i++, item++) {
 		num_attrs += item->count;
 		data = item->data;
+
 		/* Go over all units within the item. */
 		for (j = 0; j < item->count; j++, data++, id++) {
 			PRIV_ATTR(id) = &PRIV_DEV_ATTR(id).dev_attr.attr;
@@ -416,7 +567,7 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 	struct mlxreg_core_hotplug_platform_data *pdata;
 	struct mlxreg_hotplug_priv_data *priv;
 	struct mlxreg_core_item *item;
-	u32 regval, aggr_asserted;
+	u32 regval, aggr_asserted = 0;
 	unsigned long flags;
 	int i, ret;
 
@@ -426,35 +577,38 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 	item = pdata->items;
 
 	/* Mask aggregation event. */
-	ret = regmap_write(priv->regmap, pdata->cell +
-			   MLXREG_HOTPLUG_AGGR_MASK_OFF, 0);
-	if (ret < 0)
-		goto out;
+	if (pdata->cell) {
+		ret = regmap_write(priv->regmap, pdata->cell +
+				   MLXREG_HOTPLUG_AGGR_MASK_OFF, 0);
+		if (ret < 0)
+			goto out;
 
-	/* Read aggregation status. */
-	ret = regmap_read(priv->regmap, pdata->cell, &regval);
-	if (ret)
-		goto out;
+		/* Read aggregation status. */
+		ret = regmap_read(priv->regmap, pdata->cell, &regval);
+		if (ret)
+			goto out;
 
-	regval &= pdata->mask;
-	aggr_asserted = priv->aggr_cache ^ regval;
-	priv->aggr_cache = regval;
+		regval &= pdata->mask;
+		aggr_asserted = priv->aggr_cache ^ regval;
+		priv->aggr_cache = regval;
 
-	/*
-	 * Handler is invoked, but no assertion is detected at top aggregation
-	 * status level. Set aggr_asserted to mask value to allow handler extra
-	 * run over all relevant signals to recover any missed signal.
-	 */
-	if (priv->not_asserted == MLXREG_HOTPLUG_NOT_ASSERT) {
-		priv->not_asserted = 0;
-		aggr_asserted = pdata->mask;
+		/*
+		 * Handler is invoked, but no assertion is detected at top
+		 * aggregation status level. Set aggr_asserted to mask value
+		 * to allow handler extra run over all relevant signals to
+		 * recover any missed signal.
+		 */
+		if (priv->not_asserted == MLXREG_HOTPLUG_NOT_ASSERT) {
+			priv->not_asserted = 0;
+			aggr_asserted = pdata->mask;
+		}
+		if (!aggr_asserted)
+			goto unmask_event;
 	}
-	if (!aggr_asserted)
-		goto unmask_event;
 
 	/* Handle topology and health configuration changes. */
 	for (i = 0; i < pdata->counter; i++, item++) {
-		if (aggr_asserted & item->aggr_mask) {
+		if (aggr_asserted & item->aggr_mask || !pdata->cell) {
 			if (item->health)
 				mlxreg_hotplug_health_work_helper(priv, item);
 			else
@@ -481,10 +635,12 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 	return;
 
 unmask_event:
-	priv->not_asserted++;
-	/* Unmask aggregation event (no need acknowledge). */
-	ret = regmap_write(priv->regmap, pdata->cell +
-			   MLXREG_HOTPLUG_AGGR_MASK_OFF, pdata->mask);
+	if (pdata->cell) {
+		priv->not_asserted++;
+		/* Unmask aggregation event (no need acknowledge). */
+		ret = regmap_write(priv->regmap, pdata->cell +
+				   MLXREG_HOTPLUG_AGGR_MASK_OFF, pdata->mask);
+	}
 
  out:
 	if (ret)
@@ -519,10 +675,12 @@ static int mlxreg_hotplug_set_irq(struct mlxreg_hotplug_priv_data *priv)
 	}
 
 	/* Keep aggregation initial status as zero and unmask events. */
-	ret = regmap_write(priv->regmap, pdata->cell +
-			   MLXREG_HOTPLUG_AGGR_MASK_OFF, pdata->mask);
-	if (ret)
-		goto out;
+	if (pdata->cell) {
+		ret = regmap_write(priv->regmap, pdata->cell +
+				    MLXREG_HOTPLUG_AGGR_MASK_OFF, pdata->mask);
+		if (ret)
+			goto out;
+	}
 
 	/* Keep low aggregation initial status as zero and unmask events. */
 	if (pdata->cell_low) {
@@ -561,8 +719,10 @@ static void mlxreg_hotplug_unset_irq(struct mlxreg_hotplug_priv_data *priv)
 			     MLXREG_HOTPLUG_AGGR_MASK_OFF, 0);
 
 	/* Mask aggregation event. */
-	regmap_write(priv->regmap, pdata->cell + MLXREG_HOTPLUG_AGGR_MASK_OFF,
-		     0);
+	if (pdata->cell) {
+		regmap_write(priv->regmap, pdata->cell +
+			     MLXREG_HOTPLUG_AGGR_MASK_OFF, 0);
+	}
 
 	/* Clear topology configurations. */
 	for (i = 0; i < pdata->counter; i++, item++) {
@@ -659,6 +819,11 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 		return PTR_ERR(priv->hwmon);
 	}
 
+	/* Register hotplug genetlink familiy. */
+	err = mlxreg_hotplug_nl_init_once();
+	if (err)
+		return err;
+
 	/* Perform initial interrupts setup. */
 	mlxreg_hotplug_set_irq(priv);
 	priv->after_probe = true;
@@ -669,6 +834,8 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 static int mlxreg_hotplug_remove(struct platform_device *pdev)
 {
 	struct mlxreg_hotplug_priv_data *priv = dev_get_drvdata(&pdev->dev);
+
+	mlxreg_hotplug_nl_release_once();
 
 	/* Clean interrupts setup. */
 	mlxreg_hotplug_unset_irq(priv);
