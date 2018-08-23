@@ -34,4 +34,18 @@ config MLXREG_IO
 	  to system resets operation, system reset causes monitoring and some
 	  kinds of mux selection.
 
+config MLXREG_FRU
+	tristate "Mellanox field replaceable unit register control"
+	depends on REGMAP
+	depends on I2C
+	---help---
+	  This driver allows activation of Mellanox driver for field
+	  replicable units, equipped with the programmable devices and
+	  controlled through the programmable devices register space.
+	  The sets of registers access are defined per system type bases and
+	  include signal handling for chassis, ASIC events, LED control.
+
+	  This driver can also be built as a module. If so the module
+	  will be called mlxreg-fru.
+
 endif # MELLANOX_PLATFORM
