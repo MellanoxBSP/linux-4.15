@@ -183,6 +183,41 @@ static void mlxreg_hotplug_nl_release_once(void)
 	}
 }
 
+int mlxreg_hotplug_generate_netlink_event_sim(int nr,  bool event, char* label)
+{
+	struct mlxreg_hotplug_event *mlxreg_hotplug_event;
+	struct nlmsghdr *nlh;
+	struct sk_buff *skb;
+	int size;
+	int res;
+
+	if (!mlxreg_hotplug_nl.pid)
+		return 0;
+
+	/* Allocate memory for netlink message. */
+	size = nla_total_size(sizeof(*mlxreg_hotplug_event)) +
+				     nla_total_size(0);
+	skb = nlmsg_new(size, GFP_ATOMIC);
+	if (!skb)
+		return -ENOMEM;
+
+	nlh = nlmsg_put(skb, mlxreg_hotplug_nl.pid, mlxreg_hotplug_nl.seq++,
+			MLXREG_NL_EVENT, sizeof(*mlxreg_hotplug_event), 0);
+	if (!nlh)
+		return -ENOMEM;
+	mlxreg_hotplug_event = nlmsg_data(nlh);
+	memset(mlxreg_hotplug_event, 0, sizeof(*mlxreg_hotplug_event));
+	sprintf(mlxreg_hotplug_event->label, "%s", label);
+	mlxreg_hotplug_event->nr = nr;
+	mlxreg_hotplug_event->event = event;
+	nlmsg_end(skb, nlh);
+	res = netlink_unicast(mlxreg_hotplug_nl.sk, skb, mlxreg_hotplug_nl.pid,
+			      MSG_DONTWAIT);
+
+	return res;
+}
+EXPORT_SYMBOL(mlxreg_hotplug_generate_netlink_event_sim);
+
 static int
 mlxreg_hotplug_generate_netlink_event(struct mlxreg_hotplug_priv_data *priv,
 				      struct mlxreg_core_data *data,
@@ -199,7 +234,7 @@ mlxreg_hotplug_generate_netlink_event(struct mlxreg_hotplug_priv_data *priv,
 		return -EINVAL;
 
 	pdata = dev_get_platdata(&priv->pdev->dev);
-	if (!data)
+	if (!pdata)
 		return -EINVAL;
 
 	if (!mlxreg_hotplug_nl.pid)
