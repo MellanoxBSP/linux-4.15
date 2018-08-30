@@ -203,6 +203,7 @@ static struct mlxreg_core_data mlxreg_fru_fabric_asic_hotplug_items_data[] = {
 		.label = "asic1",
 		.reg = MLXREG_FRU_REG_ASIC_HEALTH_OFFSET,
 		.mask = MLXREG_FRU_ASIC1_MASK,
+		.bit = 7,
 		.hpdev.nr = MLXREG_FRU_NR_NONE,
 	},
 };
@@ -213,12 +214,14 @@ static struct mlxreg_core_data mlxreg_fru_blade_asic_hotplug_items_data[] = {
 		.label = "asic1",
 		.reg = MLXREG_FRU_REG_ASIC_HEALTH_OFFSET,
 		.mask = MLXREG_FRU_ASIC1_MASK,
+		.bit = 7,
 		.hpdev.nr = MLXREG_FRU_NR_NONE,
 	},
 	{
 		.label = "asic2",
 		.reg = MLXREG_FRU_REG_ASIC_HEALTH_OFFSET,
 		.mask = MLXREG_FRU_ASIC2_MASK,
+		.bit = 5,
 		.hpdev.nr = MLXREG_FRU_NR_NONE,
 	},
 };
@@ -410,14 +413,14 @@ static struct mlxreg_core_data mlxreg_fru_regs_io_data[] = {
 		.label = "asic1_health",
 		.reg = MLXREG_FRU_REG_ASIC_HEALTH_OFFSET,
 		.mask = MLXREG_FRU_ASIC1_MASK,
-		.bit = 6,
+		.bit = 7,
 		.mode = 0444,
 	},
 	{
 		.label = "asic2_health",
 		.reg = MLXREG_FRU_REG_ASIC_HEALTH_OFFSET,
 		.mask = MLXREG_FRU_ASIC2_MASK,
-		.bit = 4,
+		.bit = 5,
 		.mode = 0444,
 	},
 };
