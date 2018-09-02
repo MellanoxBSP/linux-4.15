@@ -203,6 +203,7 @@
 #define MLXPLAT_CPLD_MODULAR_MUX_LAST		113
 
 /* Number of channels in group */
+#define MLXPLAT_CPLD_DEFAULT_GRP_NUM		2
 #define MLXPLAT_CPLD_GRP_CHNL_NUM		8
 #define MLXPLAT_CPLD_EXT_GRP_CHNL_NUM		24
 
@@ -2060,7 +2061,246 @@ static struct mlxreg_core_data mlxplat_mlxcpld_modular_regs_io_data[] = {
 		.bit = 1,
 		.mode = 0444,
 	},
-
+	{
+		.label = "pwr_leaf1",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf2",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf3",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf4",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf5",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(4),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf6",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(5),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf7",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(6),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf8",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(7),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf9",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf10",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf11",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf12",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf13",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(4),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf14",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(5),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf15",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(6),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf16",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(7),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf17",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf18",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf19",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_leaf20",
+		.reg = MLXPLAT_CPLD_LPC_REG_BL3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine1",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine2",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine3",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine4",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine5",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(4),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine6",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(5),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine7",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(6),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine8",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(7),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine9",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine10",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine11",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine12",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine13",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(4),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine14",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(5),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine15",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(6),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine16",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(7),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine17",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine18",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine19",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0644,
+	},
+	{
+		.label = "pwr_spine20",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB3_PWR_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0644,
+	},
 };
 
 static struct mlxreg_core_platform_data mlxplat_modular_regs_io_data = {
@@ -2496,7 +2736,7 @@ static int __init mlxplat_dmi_default_matched(const struct dmi_system_id *dmi)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(mlxplat_mux_data); i++) {
+	for (i = 0; i < MLXPLAT_CPLD_DEFAULT_GRP_NUM; i++) {
 		mlxplat_mux_data[i].values = mlxplat_default_channels[i];
 		mlxplat_mux_data[i].n_values =
 				ARRAY_SIZE(mlxplat_default_channels[i]);
@@ -2550,7 +2790,7 @@ static int __init mlxplat_dmi_msn201x_matched(const struct dmi_system_id *dmi)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(mlxplat_mux_data); i++) {
+	for (i = 0; i < MLXPLAT_CPLD_DEFAULT_GRP_NUM; i++) {
 		mlxplat_mux_data[i].values = mlxplat_msn21xx_channels;
 		mlxplat_mux_data[i].n_values =
 				ARRAY_SIZE(mlxplat_msn21xx_channels);
