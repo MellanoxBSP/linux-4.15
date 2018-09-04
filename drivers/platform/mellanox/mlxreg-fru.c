@@ -236,7 +236,7 @@ static struct mlxreg_core_item mlxreg_fru_fabric_hotplug_items[] = {
 		.inversed = 1,
 		.health = false,
 	},
-	{
+	/*{
 		.data = mlxreg_fru_fabric_asic_hotplug_items_data,
 		.aggr_mask = MLXREG_FRU_ASIC1_MASK,
 		.reg = MLXREG_FRU_REG_ASIC_HEALTH_OFFSET,
@@ -244,7 +244,7 @@ static struct mlxreg_core_item mlxreg_fru_fabric_hotplug_items[] = {
 		.count = ARRAY_SIZE(mlxreg_fru_fabric_asic_hotplug_items_data),
 		.inversed = 0,
 		.health = true,
-	},
+	},*/
 };
 
 static struct mlxreg_core_item mlxreg_fru_fabric200_hotplug_items[] = {
@@ -359,7 +359,7 @@ static struct mlxreg_core_data mlxreg_fru_regs_io_data[] = {
 		.label = "pwr",
 		.reg = MLXREG_FRU_REG_GP2_OFFSET,
 		.mask = GENMASK(7, 0) & ~BIT(7),
-		.mode = 0444,
+		.mode = 0644,
 	},
 	{
 		.label = "reset_pwr_off_or_upgrade",
@@ -508,12 +508,12 @@ mlxreg_fru_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	switch (id->driver_data) {
 	case MLXREG_FRU_BLADE:
 	case MLXREG_FRU_BLADE200:
-		hotplug = &mlxreg_fru_blade_hotplug_data;
+		/*hotplug = &mlxreg_fru_blade_hotplug_data;*/
 		regs_io = &mlxreg_fru_regs_io;
 		led = &mlxreg_fru_default_led;
 		break;
 	case MLXREG_FRU_FABRIC200:
-		hotplug = &mlxreg_fru_fabric200_hotplug_data;
+		/*hotplug = &mlxreg_fru_fabric200_hotplug_data;*/
 		regs_io = &mlxreg_fru_regs_io;
 		led = &mlxreg_fru_default_led;
 		break;
