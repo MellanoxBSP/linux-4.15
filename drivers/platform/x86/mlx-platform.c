@@ -549,6 +549,18 @@ static struct mlxreg_core_data mlxplat_mlxcpld_msn21xx_pwr_items_data[] = {
 
 static struct mlxreg_core_data mlxplat_mlxcpld_default_db_items_data[] = {
 	{
+		.label = "holder1",
+		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
+		.mask = BIT(0),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "holder2",
+		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
+		.mask = BIT(1),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
 		.label = "doorbell",
 		.reg = MLXPLAT_CPLD_LPC_REG_DB_OFFSET,
 		.mask = BIT(2),
