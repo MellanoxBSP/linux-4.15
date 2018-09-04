@@ -230,6 +230,9 @@ mlxreg_hotplug_generate_netlink_event(struct mlxreg_hotplug_priv_data *priv,
 	int size;
 	int res;
 
+	if (!priv->after_probe)
+		return 0;
+
 	if (!data)
 		return -EINVAL;
 
@@ -361,7 +364,10 @@ static ssize_t mlxreg_hotplug_attr_show(struct device *dev,
 		return ret;
 
 	if (item->health) {
-		regval &= data->mask;
+		if (data->bit)
+			regval = ror32(regval & data->mask, (data->bit - 1));
+		else
+			regval &= data->mask;
 	} else {
 		/* Bit = 0 : functional if item->inversed is true. */
 		if (item->inversed)
@@ -431,7 +437,7 @@ static int mlxreg_hotplug_attr_init(struct mlxreg_hotplug_priv_data *priv)
 
 static void
 mlxreg_hotplug_work_helper(struct mlxreg_hotplug_priv_data *priv,
-			   struct mlxreg_core_item *item)
+			   struct mlxreg_core_item *item, bool *changed)
 {
 	struct mlxreg_core_data *data;
 	u32 asserted, regval, bit;
@@ -467,6 +473,11 @@ mlxreg_hotplug_work_helper(struct mlxreg_hotplug_priv_data *priv,
 	asserted = item->cache ^ regval;
 	item->cache = regval;
 
+	if (asserted)
+		*changed = true;
+	else
+		goto ack_event;
+
 	for_each_set_bit(bit, (unsigned long *)&asserted, 8) {
 		data = item->data + bit;
 		if (regval & BIT(bit)) {
@@ -481,7 +492,7 @@ mlxreg_hotplug_work_helper(struct mlxreg_hotplug_priv_data *priv,
 				mlxreg_hotplug_device_destroy(priv, data);
 		}
 	}
-
+ack_event:
 	/* Acknowledge event. */
 	ret = regmap_write(priv->regmap, item->reg + MLXREG_HOTPLUG_EVENT_OFF,
 			   0);
@@ -499,29 +510,31 @@ mlxreg_hotplug_work_helper(struct mlxreg_hotplug_priv_data *priv,
 
 static void
 mlxreg_hotplug_health_work_helper(struct mlxreg_hotplug_priv_data *priv,
-				  struct mlxreg_core_item *item)
+				  struct mlxreg_core_item *item, bool *changed)
 {
 	struct mlxreg_core_data *data = item->data;
-	u32 regval;
+	u32 regval, health;
 	int i, ret = 0;
 
+	/* Mask event. */
+	ret = regmap_write(priv->regmap, item->reg + MLXREG_HOTPLUG_MASK_OFF,
+			   0);
+	if (ret)
+		goto out;
+
+	/* Read status. */
+	ret = regmap_read(priv->regmap, item->reg, &regval);
+	if (ret)
+		goto out;
+
+	regval &= item->mask;
+
+	if (item->cache == regval)
+		goto ack_event;
+	else
+		*changed = true;
+
 	for (i = 0; i < item->count; i++, data++) {
-		/* Mask event. */
-		ret = regmap_write(priv->regmap, data->reg +
-				   MLXREG_HOTPLUG_MASK_OFF, 0);
-		if (ret)
-			goto out;
-
-		/* Read status. */
-		ret = regmap_read(priv->regmap, data->reg, &regval);
-		if (ret)
-			goto out;
-
-		regval &= data->mask;
-
-		if (item->cache == regval)
-			goto ack_event;
-
 		/*
 		 * ASIC health indication is provided through two bits. Bits
 		 * value 0x2 indicates that ASIC reached the good health, value
@@ -529,7 +542,12 @@ mlxreg_hotplug_health_work_helper(struct mlxreg_hotplug_priv_data *priv,
 		 * 0x3 indicates the booting state. During ASIC reset it should
 		 * pass the following states: dormant -> booting -> good.
 		 */
-		if (regval == MLXREG_HOTPLUG_GOOD_HEALTH_MASK) {
+		if (data->bit)
+			health = ror32(regval & data->mask, (data->bit - 1));
+		else
+			health = regval;
+
+		if (health == MLXREG_HOTPLUG_GOOD_HEALTH_MASK) {
 			if (!data->attached) {
 				/*
 				 * ASIC is in steady state. Connect associated
@@ -550,20 +568,23 @@ mlxreg_hotplug_health_work_helper(struct mlxreg_hotplug_priv_data *priv,
 				data->health_cntr = 0;
 			}
 		}
-		item->cache = regval;
-ack_event:
-		/* Acknowledge event. */
-		ret = regmap_write(priv->regmap, data->reg +
-				   MLXREG_HOTPLUG_EVENT_OFF, 0);
-		if (ret)
-			goto out;
-
-		/* Unmask event. */
-		ret = regmap_write(priv->regmap, data->reg +
-				   MLXREG_HOTPLUG_MASK_OFF, data->mask);
-		if (ret)
-			goto out;
 	}
+	item->cache = regval;
+ack_event:
+	/* Acknowledge event. */
+	ret = regmap_write(priv->regmap, item->reg + MLXREG_HOTPLUG_EVENT_OFF,
+			   0);
+	if (ret) {
+		dev_err(priv->dev, "Failed to acknowledge health event at offset 0x%08x.\n",
+			item->reg + MLXREG_HOTPLUG_EVENT_OFF);
+		goto out;
+	}
+
+	/* Unmask event. */
+	ret = regmap_write(priv->regmap, item->reg + MLXREG_HOTPLUG_MASK_OFF,
+			   item->mask);
+	if (ret)
+		goto out;
 
  out:
 	if (ret)
@@ -604,6 +625,7 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 	struct mlxreg_core_item *item;
 	u32 regval, aggr_asserted = 0;
 	unsigned long flags;
+	bool changed = false;
 	int i, ret;
 
 	priv = container_of(work, struct mlxreg_hotplug_priv_data,
@@ -639,17 +661,27 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 		}
 		if (!aggr_asserted)
 			goto unmask_event;
+	} else {
+		if (priv->not_asserted == MLXREG_HOTPLUG_NOT_ASSERT) {
+			priv->not_asserted = 0;
+			goto unmask_event;
+		}
 	}
 
 	/* Handle topology and health configuration changes. */
 	for (i = 0; i < pdata->counter; i++, item++) {
 		if (aggr_asserted & item->aggr_mask || !pdata->cell) {
 			if (item->health)
-				mlxreg_hotplug_health_work_helper(priv, item);
+				mlxreg_hotplug_health_work_helper(priv, item,
+								  &changed);
 			else
-				mlxreg_hotplug_work_helper(priv, item);
+				mlxreg_hotplug_work_helper(priv, item,
+							   &changed);
 		}
 	}
+
+	if (!pdata->cell && !changed)
+		priv->not_asserted++;
 
 	spin_lock_irqsave(&priv->lock, flags);
 
