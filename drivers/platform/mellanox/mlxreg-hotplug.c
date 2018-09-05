@@ -502,7 +502,6 @@ ack_event:
 	/* Unmask event. */
 	ret = regmap_write(priv->regmap, item->reg + MLXREG_HOTPLUG_MASK_OFF,
 			   item->mask);
-
  out:
 	if (ret)
 		dev_err(priv->dev, "Failed to complete workqueue.\n");
