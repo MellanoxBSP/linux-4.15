@@ -101,6 +101,8 @@
 #define MLXPLAT_CPLD_LPC_REG_BL3_OFFSET		0x76
 #define MLXPLAT_CPLD_LPC_REG_BL3_EVENT_OFFSET	0x77
 #define MLXPLAT_CPLD_LPC_REG_BL3_MASK_OFFSET	0x78
+#define MLXPLAT_CPLD_LPC_REG_HA1_OFFSET		0x7c
+#define MLXPLAT_CPLD_LPC_REG_HA2_OFFSET		0x7d
 #define MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET	0x7f
 #define MLXPLAT_CPLD_LPC_REG_FAB1_EVENT_OFFSET	0x80
 #define MLXPLAT_CPLD_LPC_REG_FAB1_MASK_OFFSET	0x81
@@ -1347,6 +1349,42 @@ static struct mlxreg_core_data mlxplat_mlxcpld_modular_blade_items_data3[] = {
 
 static struct mlxreg_core_data mlxplat_mlxcpld_modular_mgmt_items_data[] = {
 	{
+		.label = "holder1",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
+		.mask = BIT(0),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "holder2",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
+		.mask = BIT(1),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "holder3",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
+		.mask = BIT(2),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "holder4",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
+		.mask = BIT(3),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "holder5",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
+		.mask = BIT(4),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "holder6",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
+		.mask = BIT(5),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
 		.label = "mgmt",
 		.reg = MLXPLAT_CPLD_LPC_REG_HA_OFFSET,
 		.mask = MLXPLAT_CPLD_HA_MASK,
@@ -2313,6 +2351,84 @@ static struct mlxreg_core_data mlxplat_mlxcpld_modular_regs_io_data[] = {
 		.mask = GENMASK(7, 0) & ~BIT(3),
 		.mode = 0644,
 	},
+	{
+		.label = "other_cpu_present",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA1_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0444,
+	},
+	{
+		.label = "master_present_in",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA1_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0444,
+	},
+	{
+		.label = "ha_support_ind1_in",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA1_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0444,
+	},
+	{
+		.label = "ha_support_ind2_in",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA1_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0444,
+	},
+	{
+		.label = "ha_reset_ind1_in",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA1_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(4),
+		.mode = 0444,
+	},
+	{
+		.label = "ha_reset_ind2_in",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA1_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(5),
+		.mode = 0444,
+	},
+	{
+		.label = "pwr_on_other_cpu",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(0),
+		.mode = 0200,
+	},
+	{
+		.label = "master_present_out",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(1),
+		.mode = 0200,
+	},
+	{
+		.label = "ha_support_ind1_out",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(2),
+		.mode = 0200,
+	},
+	{
+		.label = "ha_support_ind2_out",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(3),
+		.mode = 0200,
+	},
+	{
+		.label = "ha_reset_ind1_out",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(4),
+		.mode = 0200,
+	},
+	{
+		.label = "ha_reset_ind2_out",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(5),
+		.mode = 0200,
+	},
+	{
+		.label = "reste_other_cpu",
+		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
+		.mask = GENMASK(7, 0) & ~BIT(7),
+		.mode = 0200,
+	},
 };
 
 static struct mlxreg_core_platform_data mlxplat_modular_regs_io_data = {
@@ -2430,6 +2546,8 @@ static bool mlxplat_mlxcpld_writeable_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_BL2_MASK_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_BL3_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_BL3_MASK_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_HA1_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_HA2_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_MASK_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB2_EVENT_OFFSET:
@@ -2517,6 +2635,8 @@ static bool mlxplat_mlxcpld_readable_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_BL3_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_BL3_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_BL3_MASK_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_HA1_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_HA2_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_MASK_OFFSET:
@@ -2626,6 +2746,8 @@ static bool mlxplat_mlxcpld_volatile_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_BL3_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_BL3_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_BL3_MASK_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_HA1_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_HA2_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_FAB1_MASK_OFFSET:
@@ -2976,7 +3098,7 @@ static const struct dmi_system_id mlxplat_dmi_table[] __initconst = {
 	{
 		.callback = mlxplat_dmi_modular_matched,
 		.matches = {
-			DMI_MATCH(DMI_CHASSIS_VERSION, "55"),
+			DMI_MATCH(DMI_BOARD_NAME, "VMOD0006"),
 		},
 	},
 	{
