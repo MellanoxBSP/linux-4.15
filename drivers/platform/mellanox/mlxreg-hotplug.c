@@ -61,6 +61,7 @@
 
 /**
  * struct mlxreg_hotplug_priv_data - platform private data:
+ * @list: list of objects;
  * @irq: platform device interrupt number;
  * @dev: basic device;
  * @pdev: platform device;
@@ -82,6 +83,7 @@
  * @id: socket listener process id;
  */
 struct mlxreg_hotplug_priv_data {
+	struct list_head list;
 	int irq;
 	struct device *dev;
 	struct platform_device *pdev;
@@ -104,6 +106,10 @@ struct mlxreg_hotplug_priv_data {
 	unsigned int id;
 };
 
+static struct mlxreg_hotplug_list {
+	struct list_head list;
+} mlxreg_hotplug_list;
+
 /**
  * struct mlxreg_hotplug_netlink_data - netlink control data:
  * @sk: netlink socket;
@@ -122,10 +128,16 @@ static struct mlxreg_hotplug_netlink_data mlxreg_hotplug_nl = {
 	.refcnt = REFCOUNT_INIT(0),
 };
 
+static int mlxreg_hotplug_set_irq(struct mlxreg_hotplug_priv_data *priv);
+static void mlxreg_hotplug_unset_irq(struct mlxreg_hotplug_priv_data *priv);
+
 static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 {
+	struct mlxreg_hotplug_priv_data *priv;
 	struct mlxreg_hotplug_event *msg;
 	struct nlmsghdr *nlh;
+	u16 nlmsg_type;
+	int nr;
 
 	nlh = nlmsg_hdr(skb);
 	if (!NLMSG_OK(nlh, skb->len)) {
@@ -134,7 +146,9 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 		return;
 	}
 
-	switch (nlh->nlmsg_type) {
+	nlmsg_type = MLXREG_HOTPLUG_GET_MSG_TYPE(nlh->nlmsg_type);
+	nr = MLXREG_HOTPLUG_GET_DEVID(nlh->nlmsg_type);
+	switch (nlmsg_type) {
 	case MLXREG_NL_REGISTER:
 		if (mlxreg_hotplug_nl.pid)
 			return;
@@ -145,6 +159,21 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 		if (refcount_read(&mlxreg_hotplug_nl.refcnt) > 1)
 			return;
 		mlxreg_hotplug_nl.pid = 0;
+		break;
+	case MLXREG_NL_ENABLE:
+	case MLXREG_NL_DISABLE:
+		list_for_each_entry(priv, &mlxreg_hotplug_list.list, list) {
+			if (nr == priv->pdev->id) {
+				if (nlmsg_type == MLXREG_NL_ENABLE) {
+					mlxreg_hotplug_set_irq(priv);
+					priv->after_probe = true;
+				} else {
+					mlxreg_hotplug_unset_irq(priv);
+					priv->after_probe = false;
+				}
+				break;
+			}
+		}
 		break;
 	default:
 		pr_err("Received unknown netlink message type %d\n",
@@ -166,6 +195,8 @@ static int mlxreg_hotplug_nl_init_once(void)
 							     &cfg);
 		if (!mlxreg_hotplug_nl.sk)
 			return -ENOMEM;
+
+		INIT_LIST_HEAD(&mlxreg_hotplug_list.list);
 	}
 
 	refcount_inc(&mlxreg_hotplug_nl.refcnt);
@@ -824,6 +855,7 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 	struct mlxreg_core_hotplug_platform_data *pdata;
 	struct mlxreg_hotplug_priv_data *priv;
 	struct i2c_adapter *deferred_adap;
+	u32 regval;
 	int err;
 
 	pdata = dev_get_platdata(&pdev->dev);
@@ -890,6 +922,12 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 	if (err)
 		return err;
 
+	list_add(&priv->list, &mlxreg_hotplug_list.list);
+
+	/* Verify deferred interrupt setting configuration. */
+	if (pdata->deferred_irq_set)
+		return 0;
+
 	/* Perform initial interrupts setup. */
 	mlxreg_hotplug_set_irq(priv);
 	priv->after_probe = true;
@@ -900,6 +938,9 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 static int mlxreg_hotplug_remove(struct platform_device *pdev)
 {
 	struct mlxreg_hotplug_priv_data *priv = dev_get_drvdata(&pdev->dev);
+
+	if (!list_empty(&mlxreg_hotplug_list.list))
+		list_del_rcu(&mlxreg_hotplug_list.list);
 
 	mlxreg_hotplug_nl_release_once();
 

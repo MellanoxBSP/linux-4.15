@@ -130,6 +130,7 @@ struct mlxreg_core_platform_data {
  * @mask_low: low aggregation interrupt common mask;
  * @deferred_nr: I2C adapter number must be exist prior probing execution;
  * @shift_nr: I2C adapter numbers must be incremented by this value;
+ * @deferred_irq_set: deferred interrupt setting configuration flag;
  * @sk: netlink unicast socket;
  */
 struct mlxreg_core_hotplug_platform_data {
@@ -143,6 +144,7 @@ struct mlxreg_core_hotplug_platform_data {
 	u32 mask_low;
 	int deferred_nr;
 	int shift_nr;
+	bool deferred_irq_set;
 	struct sock *sk;
 };
 

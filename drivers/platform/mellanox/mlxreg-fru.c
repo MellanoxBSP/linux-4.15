@@ -275,18 +275,21 @@ static
 struct mlxreg_core_hotplug_platform_data mlxreg_fru_fabric_hotplug_data = {
 	.items = mlxreg_fru_fabric_hotplug_items,
 	.counter = ARRAY_SIZE(mlxreg_fru_fabric_hotplug_items),
+	.deferred_irq_set = true,
 };
 
 static
 struct mlxreg_core_hotplug_platform_data mlxreg_fru_fabric200_hotplug_data = {
 	.items = mlxreg_fru_fabric200_hotplug_items,
 	.counter = ARRAY_SIZE(mlxreg_fru_fabric200_hotplug_items),
+	.deferred_irq_set = true,
 };
 
 static
 struct mlxreg_core_hotplug_platform_data mlxreg_fru_blade_hotplug_data = {
 	.items = mlxreg_fru_blade_hotplug_items,
 	.counter = ARRAY_SIZE(mlxreg_fru_blade_hotplug_items),
+	.deferred_irq_set = true,
 };
 
 /* LED default data */
