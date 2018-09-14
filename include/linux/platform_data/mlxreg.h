@@ -132,6 +132,12 @@ struct mlxreg_core_platform_data {
  * @shift_nr: I2C adapter numbers must be incremented by this value;
  * @deferred_irq_set: deferred interrupt setting configuration flag;
  * @sk: netlink unicast socket;
+ * @presence: callback for device physical presence verification;
+ * @wakeup_signal: : callback for device handler wakeup signal verification;
+ * @wakeup_signal_clear: : callback for device handler wakeup signal clearing;
+ * @presence_reg_base : base address of presence register;
+ * @wakeup_signal_reg_base : base address of wakeup register;
+ * @devnum : device number within the device type;
  */
 struct mlxreg_core_hotplug_platform_data {
 	struct mlxreg_core_item *items;
@@ -146,6 +152,14 @@ struct mlxreg_core_hotplug_platform_data {
 	int shift_nr;
 	bool deferred_irq_set;
 	struct sock *sk;
+	bool (*presence)(struct mlxreg_core_hotplug_platform_data *data);
+	bool (*wakeup_signal)(struct mlxreg_core_hotplug_platform_data *data);
+	void (*wakeup_signal_clear)(struct mlxreg_core_hotplug_platform_data *data);
+	u32 presence_reg_base;
+	u32 wakeup_signal_reg_base;
+	u32 devnum;
 };
+
+void __iomem *mlxreg_core_get_io_context(void);
 
 #endif /* __LINUX_PLATFORM_DATA_MLXREG_H */

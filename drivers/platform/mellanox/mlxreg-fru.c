@@ -46,6 +46,11 @@
 #define MLXREG_FRU_SET_VBUS(bus, chan)		((((bus) << 8) & \
 						 GENMASK(31, 8)) + (chan) + \
 						 MLXREG_FRU_CHAN_OFFSET)
+#define MLXREG_FRU_FAB_PRESENCE_REG_BASE	0x7f
+#define MLXREG_FRU_FAB_WAKEUP_SIGNAL_REG_BASE	0xaa
+#define MLXREG_FRU_FAB_PRESENCE_REG_SHIFT	0x03
+#define MLXREG_FRU_FAB_WAKEUP_SIGNAL_REG_SHIFT	0x03
+#define MLXREG_FRU_FAB_REG_STEP			8
 
 /*
  * enum mlxreg_fru_type - driver flavours:
@@ -271,11 +276,61 @@ static struct mlxreg_core_item mlxreg_fru_blade_hotplug_items[] = {
 	},
 };
 
+static bool
+mlxreg_fru_presence(struct mlxreg_core_hotplug_platform_data *data)
+{
+	void __iomem *base = mlxreg_core_get_io_context();
+	u32 devnum = data->devnum;
+	u32 off, bit, regval;
+
+	off = (devnum / MLXREG_FRU_FAB_REG_STEP) *
+	      MLXREG_FRU_FAB_PRESENCE_REG_SHIFT + data->presence_reg_base;
+	bit = devnum % MLXREG_FRU_FAB_REG_STEP;
+
+	regval = ioread8(base + off);
+
+	return !(regval & BIT(bit));
+}
+
+static bool
+mlxreg_fru_wakeup_signal(struct mlxreg_core_hotplug_platform_data *data)
+{
+	void __iomem *base = mlxreg_core_get_io_context();
+	u32 devnum = data->devnum;
+	u8 off, bit, regval;
+
+	off = (devnum / MLXREG_FRU_FAB_REG_STEP) *
+	      MLXREG_FRU_FAB_WAKEUP_SIGNAL_REG_SHIFT + data->wakeup_signal_reg_base;
+	bit = devnum % MLXREG_FRU_FAB_REG_STEP;
+	regval = ioread8(base + off);
+
+	return regval & BIT(bit);
+}
+
+static void
+mlxreg_fru_wakeup_signal_clear(struct mlxreg_core_hotplug_platform_data *data)
+{
+	void __iomem *base = mlxreg_core_get_io_context();
+	u32 devnum = data->devnum;
+	u8 off, bit, regval;
+
+	off = (devnum / MLXREG_FRU_FAB_REG_STEP) *
+	     MLXREG_FRU_FAB_WAKEUP_SIGNAL_REG_SHIFT + data->wakeup_signal_reg_base;
+	bit = devnum % MLXREG_FRU_FAB_REG_STEP;
+	regval = ~BIT(bit);
+	iowrite8(regval, base + off);
+}
+
 static
 struct mlxreg_core_hotplug_platform_data mlxreg_fru_fabric_hotplug_data = {
 	.items = mlxreg_fru_fabric_hotplug_items,
 	.counter = ARRAY_SIZE(mlxreg_fru_fabric_hotplug_items),
 	.deferred_irq_set = true,
+	.presence = mlxreg_fru_presence,
+	.wakeup_signal = mlxreg_fru_wakeup_signal,
+	.wakeup_signal_clear = mlxreg_fru_wakeup_signal_clear,
+	.presence_reg_base = MLXREG_FRU_FAB_PRESENCE_REG_BASE,
+	.wakeup_signal_reg_base = MLXREG_FRU_FAB_WAKEUP_SIGNAL_REG_BASE,
 };
 
 static

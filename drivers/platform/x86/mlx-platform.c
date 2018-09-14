@@ -71,6 +71,8 @@
 #define MLXPLAT_CPLD_LPC_REG_AGGRLO_MASK_OFFSET	0x41
 #define MLXPLAT_CPLD_LPC_REG_AGGRHA_OFFSET	0x42
 #define MLXPLAT_CPLD_LPC_REG_AGGRHA_MASK_OFFSET	0x43
+#define MLXPLAT_CPLD_LPC_REG_AGGRHA2_OFFSET	0x44
+#define MLXPLAT_CPLD_LPC_REG_AGGRHA2_MASK_OFFSET 0x45
 #define MLXPLAT_CPLD_LPC_REG_DB_OFFSET		0x47
 #define MLXPLAT_CPLD_LPC_REG_DB_EVENT_OFFSET	0x48
 #define MLXPLAT_CPLD_LPC_REG_DB_MASK_OFFSET	0x49
@@ -180,9 +182,11 @@
 #define MLXPLAT_CPLD_AGGR_ASIC_MASK_NG	0x01
 #define MLXPLAT_CPLD_AGGR_MASK_NG_DEF	0x04
 #define MLXPLAT_CPLD_AGGR_BFF_MASK_MOD	BIT(0)
-#define MLXPLAT_CPLD_AGGR_PSU_MASK_MOD	BIT(2)
+#define MLXPLAT_CPLD_AGGR_PSU_MASK_MOD	BIT(1)
+#define MLXPLAT_CPLD_AGGR_EXTINT_MASK_MOD BIT(2)
 #define MLXPLAT_CPLD_AGGR_MASK_MODULAR	(MLXPLAT_CPLD_AGGR_BFF_MASK_MOD | \
-					 MLXPLAT_CPLD_AGGR_PSU_MASK_MOD)
+					 MLXPLAT_CPLD_AGGR_PSU_MASK_MOD | \
+					 MLXPLAT_CPLD_AGGR_EXTINT_MASK_MOD)
 #define MLXPLAT_CPLD_LOW_AGGR_MASK_LOW	0xe1
 #define MLXPLAT_CPLD_LOW_AGGR_MASK_MOD	GENMASK(5, 0)
 #define MLXPLAT_CPLD_PSU_MASK		GENMASK(1, 0)
@@ -1130,6 +1134,24 @@ static struct mlxreg_core_data mlxplat_mlxcpld_modular_fabric_items_data1[] = {
 		.label = "spine4",
 		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET,
 		.mask = BIT(3),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "spine5",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET,
+		.mask = BIT(4),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "spine6",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET,
+		.mask = BIT(5),
+		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
+	},
+	{
+		.label = "spine7",
+		.reg = MLXPLAT_CPLD_LPC_REG_FAB1_OFFSET,
+		.mask = BIT(6),
 		.hpdev.nr = MLXPLAT_CPLD_NR_NONE,
 	},
 	{
@@ -2605,6 +2627,8 @@ static bool mlxplat_mlxcpld_readable_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_AGGRLO_MASK_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_AGGRHA_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_AGGRHA_MASK_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_AGGRHA2_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_AGGRHA2_MASK_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_DB_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_DB_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_DB_MASK_OFFSET:
@@ -2716,6 +2740,8 @@ static bool mlxplat_mlxcpld_volatile_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_AGGRLO_MASK_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_AGGRHA_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_AGGRHA_MASK_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_AGGRHA2_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_AGGRHA2_MASK_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_DB_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_DB_EVENT_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_DB_MASK_OFFSET:
@@ -2822,6 +2848,12 @@ struct mlxplat_mlxcpld_regmap_context {
 };
 
 static struct mlxplat_mlxcpld_regmap_context mlxplat_mlxcpld_regmap_ctx;
+
+void __iomem *mlxreg_core_get_io_context(void)
+{
+	return mlxplat_mlxcpld_regmap_ctx.base;
+}
+EXPORT_SYMBOL_GPL(mlxreg_core_get_io_context);
 
 static int
 mlxplat_mlxcpld_reg_read(void *context, unsigned int reg, unsigned int *val)

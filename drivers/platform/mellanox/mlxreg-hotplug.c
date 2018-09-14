@@ -133,10 +133,13 @@ static void mlxreg_hotplug_unset_irq(struct mlxreg_hotplug_priv_data *priv);
 
 static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 {
+	struct mlxreg_core_hotplug_platform_data *pdata;
 	struct mlxreg_hotplug_priv_data *priv;
 	struct mlxreg_hotplug_event *msg;
 	struct nlmsghdr *nlh;
 	u16 nlmsg_type;
+	u32 devnum;
+	u32 *p_mod_id;
 	int nr;
 
 	nlh = nlmsg_hdr(skb);
@@ -148,11 +151,13 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 
 	nlmsg_type = MLXREG_HOTPLUG_GET_MSG_TYPE(nlh->nlmsg_type);
 	nr = MLXREG_HOTPLUG_GET_DEVID(nlh->nlmsg_type);
+	p_mod_id = (u32 *)NLMSG_DATA(nlh);
+	devnum = *p_mod_id;
+
 	switch (nlmsg_type) {
 	case MLXREG_NL_REGISTER:
 		if (mlxreg_hotplug_nl.pid)
 			return;
-		msg = (struct mlxreg_hotplug_event *)NLMSG_DATA(nlh);
 		mlxreg_hotplug_nl.pid = nlh->nlmsg_pid;
 		break;
 	case MLXREG_NL_UNREGISTER:
@@ -165,6 +170,8 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 		list_for_each_entry(priv, &mlxreg_hotplug_list.list, list) {
 			if (nr == priv->pdev->id) {
 				if (nlmsg_type == MLXREG_NL_ENABLE) {
+					pdata = dev_get_platdata(&priv->pdev->dev);
+					pdata->devnum = devnum;
 					mlxreg_hotplug_set_irq(priv);
 					priv->after_probe = true;
 				} else {
@@ -291,6 +298,7 @@ mlxreg_hotplug_generate_netlink_event(struct mlxreg_hotplug_priv_data *priv,
 	mlxreg_hotplug_event->nr = priv->pdev->id;
 	mlxreg_hotplug_event->event = event;
 	nlmsg_end(skb, nlh);
+
 	res = netlink_unicast(mlxreg_hotplug_nl.sk, skb, mlxreg_hotplug_nl.pid,
 			      MSG_DONTWAIT);
 
@@ -303,12 +311,18 @@ static int mlxreg_hotplug_device_create(struct mlxreg_hotplug_priv_data *priv,
 	struct mlxreg_core_hotplug_platform_data *pdata;
 	int res;
 
+	pdata = dev_get_platdata(&priv->pdev->dev);
+
 	/* Send hotplug event. */
 	if (IS_REACHABLE(CONFIG_NET)) {
-		res = mlxreg_hotplug_generate_netlink_event(priv, data, true);
-		if (res < 0)
+		if (pdata->cell || (pdata->wakeup_signal &&
+		    pdata->wakeup_signal(pdata))) {
+			res = mlxreg_hotplug_generate_netlink_event(priv, data,
+								    true);
+			if (res < 0)
 			dev_err(priv->dev, "Failed to send netlink event:%d",
 				res);
+		}
 	}
 
 	/* Notify user by sending hwmon uevent. */
@@ -321,7 +335,6 @@ static int mlxreg_hotplug_device_create(struct mlxreg_hotplug_priv_data *priv,
 	if (data->hpdev.nr < 0)
 		return 0;
 
-	pdata = dev_get_platdata(&priv->pdev->dev);
 	data->hpdev.adapter = i2c_get_adapter(data->hpdev.nr +
 					      pdata->shift_nr);
 	if (!data->hpdev.adapter) {
@@ -350,13 +363,20 @@ mlxreg_hotplug_device_destroy(struct mlxreg_hotplug_priv_data *priv,
 			      struct mlxreg_core_data *data)
 {
 	int res;
+	struct mlxreg_core_hotplug_platform_data *pdata;
+
+	pdata = dev_get_platdata(&priv->pdev->dev);
 
 	/* Send hotplug event. */
 	if (IS_REACHABLE(CONFIG_NET)) {
-		res = mlxreg_hotplug_generate_netlink_event(priv, data, false);
-		if (res < 0)
-			dev_err(priv->dev, "Failed to send netlink event:%d",
-				res);
+		if (pdata->cell || (pdata->wakeup_signal &&
+		    pdata->wakeup_signal(pdata))) {
+			res = mlxreg_hotplug_generate_netlink_event(priv, data,
+								    false);
+			if (res < 0)
+				dev_err(priv->dev, "Failed to send netlink event:%d",
+					res);
+		}
 	}
 
 	/* Notify user by sending hwmon uevent. */
@@ -692,7 +712,10 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 		if (!aggr_asserted)
 			goto unmask_event;
 	} else {
-		if (priv->not_asserted == MLXREG_HOTPLUG_NOT_ASSERT) {
+		if ((priv->not_asserted == MLXREG_HOTPLUG_NOT_ASSERT) ||
+		    (pdata->presence && !pdata->presence(pdata)) ||
+		    (pdata->wakeup_signal && !pdata->wakeup_signal(pdata) &&
+		     priv->after_probe)) {
 			priv->not_asserted = 0;
 			goto unmask_event;
 		}
@@ -707,8 +730,14 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 			else
 				mlxreg_hotplug_work_helper(priv, item,
 							   &changed);
+
+			if (pdata->wakeup_signal_clear)
+				pdata->wakeup_signal_clear(pdata);
 		}
 	}
+
+	if (!priv->after_probe)
+		goto unmask_event;
 
 	if (!pdata->cell && !changed)
 		priv->not_asserted++;
@@ -794,7 +823,9 @@ static int mlxreg_hotplug_set_irq(struct mlxreg_hotplug_priv_data *priv)
  out:
 	if (ret)
 		dev_err(priv->dev, "Failed to set interrupts.\n");
-	enable_irq(priv->irq);
+
+	if (pdata->cell)
+		enable_irq(priv->irq);
 	return ret;
 }
 
@@ -807,7 +838,10 @@ static void mlxreg_hotplug_unset_irq(struct mlxreg_hotplug_priv_data *priv)
 
 	pdata = dev_get_platdata(&priv->pdev->dev);
 	item = pdata->items;
-	disable_irq(priv->irq);
+
+	if (pdata->cell)
+		disable_irq(priv->irq);
+
 	cancel_delayed_work_sync(&priv->dwork_irq);
 
 	/* Mask low aggregation event, if defined. */
@@ -840,9 +874,11 @@ static void mlxreg_hotplug_unset_irq(struct mlxreg_hotplug_priv_data *priv)
 
 static irqreturn_t mlxreg_hotplug_irq_handler(int irq, void *dev)
 {
+	struct mlxreg_core_hotplug_platform_data *pdata;
 	struct mlxreg_hotplug_priv_data *priv;
 
 	priv = (struct mlxreg_hotplug_priv_data *)dev;
+	pdata = dev_get_platdata(&priv->pdev->dev);
 
 	/* Schedule work task for immediate execution.*/
 	schedule_delayed_work(&priv->dwork_irq, 0);
@@ -855,7 +891,6 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 	struct mlxreg_core_hotplug_platform_data *pdata;
 	struct mlxreg_hotplug_priv_data *priv;
 	struct i2c_adapter *deferred_adap;
-	u32 regval;
 	int err;
 
 	pdata = dev_get_platdata(&pdev->dev);
@@ -897,7 +932,9 @@ static int mlxreg_hotplug_probe(struct platform_device *pdev)
 		return err;
 	}
 
-	disable_irq(priv->irq);
+	if (pdata->cell)
+		disable_irq(priv->irq);
+
 	spin_lock_init(&priv->lock);
 	INIT_DELAYED_WORK(&priv->dwork_irq, mlxreg_hotplug_work_handler);
 	dev_set_drvdata(&pdev->dev, priv);
