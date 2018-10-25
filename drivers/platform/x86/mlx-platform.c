@@ -321,28 +321,28 @@ static const int mlxplat_modular_channels[][MLXPLAT_CPLD_EXT_GRP_CHNL_NUM] = {
 
 static const int
 mlxplat_modular200_channels[][MLXPLAT_CPLD_EXT_GRP_CHNL_NUM] = {
-               {
-                              1, 2, 3, 4, 5, 6, 7, 8
-               },
-               {
-                              1, 2, 3, 4, 5, 6, 7, 8
-               },
-               {
-                              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-                              19, 20, 21, 22, 23, 24
-               },
-               {
-                              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-                              19, 20, 21, 22, 23, 24
-               },
-               {
-                              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-                              19, 20, 21, 22, 23, 24
-               },
-               {
-                              1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
-                              19, 20, 21, 22, 23, 24
-               },
+{
+	1, 2, 3, 4, 5, 6, 7, 8
+},
+{
+	1, 2, 3, 4, 5, 6, 7, 8
+},
+{
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+	19, 20, 21, 22, 23, 24
+},
+{
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+	19, 20, 21, 22, 23, 24
+},
+{
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+	19, 20, 21, 22, 23, 24
+},
+{
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+	19, 20, 21, 22, 23, 24
+},
 };
 
 /* Platform mux data */
@@ -3034,19 +3034,19 @@ static int __init mlxplat_dmi_modular_matched(const struct dmi_system_id *dmi)
 static int __init
 mlxplat_dmi_modular200_matched(const struct dmi_system_id *dmi)
 {
-               int i;
+	int i;
 
-               for (i = 0; i < ARRAY_SIZE(mlxplat_mux_data); i++) {
-                              mlxplat_mux_data[i].values = mlxplat_modular200_channels[i];
-                              mlxplat_mux_data[i].n_values = mlxplat_modular_chan_num[i];
-               }
-               mlxplat_hotplug = &mlxplat_mlxcpld_modular_data;
-               mlxplat_hotplug->deferred_nr = MLXPLAT_CPLD_MODULAR_MUX_LAST,
-               mlxplat_led = &mlxplat_modular_led_data;
-               mlxplat_regs_io = &mlxplat_modular_regs_io_data;
-               mlxplat_mux_array_size = MLXPLAT_CPLD_LPC_MUX_DEVS_MAX;
+	for (i = 0; i < ARRAY_SIZE(mlxplat_mux_data); i++) {
+		mlxplat_mux_data[i].values = mlxplat_modular200_channels[i];
+		mlxplat_mux_data[i].n_values = mlxplat_modular_chan_num[i];
+	}
+	mlxplat_hotplug = &mlxplat_mlxcpld_modular_data;
+	mlxplat_hotplug->deferred_nr = MLXPLAT_CPLD_MODULAR_MUX_LAST,
+	mlxplat_led = &mlxplat_modular_led_data;
+	mlxplat_regs_io = &mlxplat_modular_regs_io_data;
+	mlxplat_mux_array_size = MLXPLAT_CPLD_LPC_MUX_DEVS_MAX;
 
-               return 1;
+	return 1;
 };
 
 static int __init mlxplat_dmi_undefined_matched(const struct dmi_system_id *dmi)
