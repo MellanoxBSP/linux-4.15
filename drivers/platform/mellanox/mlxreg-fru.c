@@ -706,7 +706,7 @@ static int mlxreg_fru_remove(struct i2c_client *client)
 static const struct i2c_device_id mlxreg_fru_id[] = {
 	{ "mlxreg_fru_fabric", MLXREG_FRU_FABRIC },
 	{ "mlxreg_fru_blade", MLXREG_FRU_BLADE },
-	{ "mlxreg_fru_fabric200", MLXREG_FRU_FABRIC200 },
+	{ "mlxreg_fru_fab200", MLXREG_FRU_FABRIC200 },
 	{ "mlxreg_fru_blade200", MLXREG_FRU_BLADE200 },
 	{ },
 };
