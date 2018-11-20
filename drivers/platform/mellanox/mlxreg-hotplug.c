@@ -221,7 +221,9 @@ static void mlxreg_hotplug_nl_release_once(void)
 	}
 }
 
-int mlxreg_hotplug_generate_netlink_event_sim(int nr,  bool event, char* label)
+int mlxreg_hotplug_generate_netlink_event_sim(int nr, bool event,
+					      unsigned int simulated,
+					      char* label)
 {
 	struct mlxreg_hotplug_event *mlxreg_hotplug_event;
 	struct nlmsghdr *nlh;
@@ -248,6 +250,7 @@ int mlxreg_hotplug_generate_netlink_event_sim(int nr,  bool event, char* label)
 	sprintf(mlxreg_hotplug_event->label, "%s", label);
 	mlxreg_hotplug_event->nr = nr;
 	mlxreg_hotplug_event->event = event;
+	mlxreg_hotplug_event->simulated = simulated;
 	nlmsg_end(skb, nlh);
 	res = netlink_unicast(mlxreg_hotplug_nl.sk, skb, mlxreg_hotplug_nl.pid,
 			      MSG_DONTWAIT);

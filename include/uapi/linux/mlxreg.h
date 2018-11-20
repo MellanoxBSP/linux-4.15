@@ -25,7 +25,8 @@ struct mlxreg_hotplug_event {
 	unsigned int id;
 	char label[MLXREG_GENL_NAME_LENGTH];
 	int nr;
-	bool event;
+	char event;
+	char simulated;
 };
 
 #endif /* _UAPI_LINUX_MLXREG_H */
