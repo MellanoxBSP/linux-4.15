@@ -168,6 +168,7 @@ static int i2c_mux_reg_probe(struct platform_device *pdev)
 	unsigned int class;
 	int i, ret, nr;
 
+	dev_info(&pdev->dev, "Start i2c_mux_reg_probe\n");
 	mux = devm_kzalloc(&pdev->dev, sizeof(*mux), GFP_KERNEL);
 	if (!mux)
 		return -ENOMEM;
@@ -184,8 +185,23 @@ static int i2c_mux_reg_probe(struct platform_device *pdev)
 	}
 
 	parent = i2c_get_adapter(mux->data.parent);
-	if (!parent)
+	if (!parent){
+		dev_info(&pdev->dev, "No adapter ready for parent %d\n", mux->data.parent);
 		return -EPROBE_DEFER;
+	}
+
+	dev_info(&pdev->dev, "parent kobject %s %p, sysfs directory entry %p\n",
+		 kobject_name(&parent->dev.kobj), &parent->dev.kobj.parent,
+		 (&parent->dev.kobj.parent) ? &parent->dev.kobj.parent->sd :
+		 NULL);
+
+	if (!(&parent->dev.kobj.parent) || !(&parent->dev.kobj.parent->sd)) {
+		dev_info(&pdev->dev, "parent kobject %s sysfs directory entry not ready yet %p\n",
+			 kobject_name(&parent->dev.kobj),
+			 (&parent->dev.kobj.parent) ?
+			 &parent->dev.kobj.parent->sd : NULL);
+		return -EPROBE_DEFER;
+	}
 
 	if (!mux->data.reg) {
 		dev_info(&pdev->dev,
@@ -231,6 +247,7 @@ static int i2c_mux_reg_probe(struct platform_device *pdev)
 	dev_dbg(&pdev->dev, "%d port mux on %s adapter\n",
 		 mux->data.n_values, muxc->parent->name);
 
+	dev_info(&pdev->dev, "Exit i2c_mux_reg_probe\n");
 	return 0;
 
 err_del_mux_adapters:

@@ -302,6 +302,8 @@ static int acpi_platform_notify(struct device *dev)
 	struct acpi_device *adev;
 	int ret;
 
+        dev_info(dev, "Notified\n");
+
 	ret = acpi_bind_one(dev, NULL);
 	if (ret && type) {
 		struct acpi_device *adev;
