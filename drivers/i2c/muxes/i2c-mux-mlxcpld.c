@@ -159,7 +159,7 @@ static int mlxcpld_mux_probe(struct i2c_client *client,
 	struct mlxcpld_mux *data;
 	int err;
 
-	dev_info(&pdev->dev, "Start mlxcpld_mux_probe\n");
+	printk("Start mlxcpld_mux_probe\n");
 	if (!pdata)
 		return -EINVAL;
 
@@ -189,7 +189,7 @@ static int mlxcpld_mux_probe(struct i2c_client *client,
 		if (err)
 			goto virt_reg_failed;
 	}
-	dev_info(&pdev->dev, "Start mlxcpld_mux_probe\n");
+	printk("Start mlxcpld_mux_probe\n");
 	return 0;
 
 virt_reg_failed:

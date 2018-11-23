@@ -223,7 +223,7 @@ static void mlxreg_hotplug_nl_release_once(void)
 
 int mlxreg_hotplug_generate_netlink_event_sim(int nr, bool event,
 					      unsigned int simulated,
-					      char* label)
+					      char *label)
 {
 	struct mlxreg_hotplug_event *mlxreg_hotplug_event;
 	struct nlmsghdr *nlh;
