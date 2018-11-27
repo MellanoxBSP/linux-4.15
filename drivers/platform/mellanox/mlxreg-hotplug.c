@@ -135,7 +135,6 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 {
 	struct mlxreg_core_hotplug_platform_data *pdata;
 	struct mlxreg_hotplug_priv_data *priv;
-	struct mlxreg_hotplug_event *msg;
 	struct nlmsghdr *nlh;
 	u16 nlmsg_type;
 	u32 devnum;
@@ -152,7 +151,8 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 	nlmsg_type = MLXREG_HOTPLUG_GET_MSG_TYPE(nlh->nlmsg_type);
 	nr = MLXREG_HOTPLUG_GET_DEVID(nlh->nlmsg_type);
 	p_mod_id = (u32 *)NLMSG_DATA(nlh);
-	devnum = *p_mod_id;
+	if (p_mod_id)
+		devnum = *p_mod_id;
 
 	switch (nlmsg_type) {
 	case MLXREG_NL_REGISTER:
@@ -185,7 +185,7 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 	default:
 		pr_err("Received unknown netlink message type %d\n",
 		       nlh->nlmsg_type);
-			break;
+		break;
 	}
 }
 
@@ -558,7 +558,8 @@ ack_event:
 			   item->mask);
  out:
 	if (ret)
-		dev_err(priv->dev, "Failed to complete workqueue.\n");
+		dev_err(priv->dev, "%s:Failed to complete workqueue.\n",
+			__func__);
 }
 
 static void
@@ -641,7 +642,8 @@ ack_event:
 
  out:
 	if (ret)
-		dev_err(priv->dev, "Failed to complete workqueue.\n");
+		dev_err(priv->dev, "%s:Failed to complete workqueue.\n",
+			__func__);
 }
 
 /*
@@ -680,6 +682,7 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 	unsigned long flags;
 	bool changed = false;
 	int i, ret;
+	ret = 0;
 
 	priv = container_of(work, struct mlxreg_hotplug_priv_data,
 			    dwork_irq.work);
@@ -722,6 +725,8 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 			priv->not_asserted = 0;
 			goto unmask_event;
 		}
+		if (!priv->after_probe)
+			return;
 	}
 
 	/* Handle topology and health configuration changes. */
@@ -773,7 +778,8 @@ unmask_event:
 
  out:
 	if (ret)
-		dev_err(priv->dev, "Failed to complete workqueue.\n");
+		dev_err(priv->dev, "%s:Failed to complete workqueue.\n",
+			__func__);
 }
 
 static int mlxreg_hotplug_set_irq(struct mlxreg_hotplug_priv_data *priv)
