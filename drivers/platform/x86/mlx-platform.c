@@ -3184,8 +3184,13 @@ static int __init mlxplat_dmi_undefined_matched(const struct dmi_system_id *dmi)
 
 	case INTEL_FAM6_ATOM_SILVERMONT2:
 			return mlxplat_dmi_msn21xx_matched(dmi);
+
+	case INTEL_FAM6_BROADWELL_XEON_D:
+	case INTEL_FAM6_BROADWELL_CORE:
+		return mlxplat_dmi_qmb7xx_matched(dmi);
+
 	default:
-		return -ENODEV;
+		return 1;
 	}
 }
 
@@ -3296,6 +3301,7 @@ static const struct dmi_system_id mlxplat_dmi_table[] __initconst = {
 			DMI_MATCH(DMI_BOARD_NAME, "VMOD0006"),
 		},
 	},
+	/* This tuple must be last */
 	{
 		.callback = mlxplat_dmi_undefined_matched,
 		.matches = {
