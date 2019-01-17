@@ -142,7 +142,7 @@ mlxreg_led_get_hw(struct mlxreg_led_data *led_data)
 	 */
 	err = regmap_read(led_pdata->regmap, data->reg, &regval);
 	if (err < 0) {
-		dev_warn(led_data->led_cdev.dev, "Failed to get current brightness, error: %d\n",
+		dev_warn(led_data->led_cdev.dev, "Can not get current brightness (%d) - assume LED is OFF\n",
 			 err);
 		/* Assume the LED is OFF */
 		return LED_OFF;
