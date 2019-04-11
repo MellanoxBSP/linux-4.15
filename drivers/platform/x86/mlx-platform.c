@@ -220,6 +220,8 @@
 #define MLXPLAT_CPLD_LPC_REG_GEO_ADDR_VALUE1	0x25
 #define MLXPLAT_CPLD_LPC_REG_GEO_ADDR_VALUE2	0x26
 
+#define MLXPLAT_CPLD_LPC_I2C_ADAP_READY_CNTR	100
+
 /* mlxplat_priv - platform private data
  * @pdev_i2c - i2c controller platform device
  * @pdev_mux - array of mux platform devices
@@ -3446,10 +3448,30 @@ static int mlxplat_mlxcpld_verify_bus_topology(int *nr)
 	return 0;
 }
 
+static bool mlxplat_mlxcpld_wait_adapter(int nr, const char *name)
+{
+	struct i2c_adapter *adap;
+	bool ret = false;
+
+	adap = i2c_get_adapter(nr);
+	if (!adap)
+		return ret;
+
+	if (!name)
+		ret = true;
+	else if (!strncmp(adap->name, name, sizeof(adap->name)))
+		ret = true;
+
+	i2c_put_adapter(adap);
+
+	return ret;
+}
+
 static int __init mlxplat_init(void)
 {
 	struct mlxplat_priv *priv;
-	int i, j, nr, err;
+	int i, j, nr, err, ready_cntr = 0;
+	bool ready;
 
 	if (!dmi_check_system(mlxplat_dmi_table))
 		return -ENODEV;
@@ -3481,7 +3503,22 @@ static int __init mlxplat_init(void)
 		goto fail_alloc;
 	}
 
+	nr = MLXPLAT_CPLD_PHYS_ADAPTER_DEF_NR + mlxplat_hotplug->shift_nr;
+	do {
+		ready = mlxplat_mlxcpld_wait_adapter(nr, "i2c-mlxcpld");
+		if (!ready) {
+			msleep(100);
+			ready_cntr++;
+		}
+	} while (!ready && ready_cntr < MLXPLAT_CPLD_LPC_I2C_ADAP_READY_CNTR);
+
+	if (!ready)
+		dev_info(&mlxplat_dev->dev, "I2C adapter %d  is not ready.",
+			 nr);
+
 	for (i = 0; i < mlxplat_mux_array_size; i++) {
+		ready_cntr = 0;
+retry_mux:
 		priv->pdev_mux[i] = platform_device_register_resndata(
 						&mlxplat_dev->dev,
 						"i2c-mux-reg", i, NULL,
@@ -3490,6 +3527,22 @@ static int __init mlxplat_init(void)
 		if (IS_ERR(priv->pdev_mux[i])) {
 			err = PTR_ERR(priv->pdev_mux[i]);
 			goto fail_platform_mux_register;
+		}
+
+		nr = mlxplat_mux_data[i].base_nr;
+		do {
+			ready = mlxplat_mlxcpld_wait_adapter(nr, NULL);
+			if (!ready) {
+				msleep(100);
+				ready_cntr++;
+			}
+		} while (!ready && ready_cntr <
+			 MLXPLAT_CPLD_LPC_I2C_ADAP_READY_CNTR);
+
+		if (!ready) {
+			dev_info(&mlxplat_dev->dev, "I2C adapter %d is not ready.",
+				 nr);
+			goto retry_mux;
 		}
 	}
 
