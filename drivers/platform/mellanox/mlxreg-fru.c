@@ -577,6 +577,20 @@ mlxreg_fru_probe(struct i2c_client *client, const struct i2c_device_id *id)
 		break;
 	case MLXREG_FRU_FABRIC:
 		hotplug = &mlxreg_fru_fabric_hotplug_data;
+		hotplug->items = devm_kmemdup(&client->dev,
+				mlxreg_fru_fabric_hotplug_data.items,
+				sizeof(*hotplug->items) * hotplug->counter,
+				GFP_KERNEL);
+		if (!hotplug->items)
+			return -ENOMEM;
+		for (i = 0; i < mlxreg_fru_fabric_hotplug_data.counter; i++) {
+			hotplug->items[i].data = devm_kmemdup(&client->dev,
+					mlxreg_fru_fabric_hotplug_data.items[i].data,
+					sizeof(*hotplug->items[i].data) * hotplug->items[i].count,
+					GFP_KERNEL);
+			if (!hotplug->items[i].data)
+				return -ENOMEM;
+		}
 		regs_io = &mlxreg_fru_regs_io;
 		led = &mlxreg_fru_extended_led;
 		break;

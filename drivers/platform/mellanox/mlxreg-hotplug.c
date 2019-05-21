@@ -317,7 +317,7 @@ static int mlxreg_hotplug_device_create(struct mlxreg_hotplug_priv_data *priv,
 	pdata = dev_get_platdata(&priv->pdev->dev);
 
 	/* Send hotplug event. */
-	if (IS_REACHABLE(CONFIG_NET)) {
+	if (IS_REACHABLE(CONFIG_NET) && priv->after_probe) {
 		if (pdata->cell || (pdata->wakeup_signal &&
 		    pdata->wakeup_signal(pdata))) {
 			res = mlxreg_hotplug_generate_netlink_event(priv, data,
@@ -371,7 +371,7 @@ mlxreg_hotplug_device_destroy(struct mlxreg_hotplug_priv_data *priv,
 	pdata = dev_get_platdata(&priv->pdev->dev);
 
 	/* Send hotplug event. */
-	if (IS_REACHABLE(CONFIG_NET)) {
+	if (IS_REACHABLE(CONFIG_NET) && priv->after_probe) {
 		if (pdata->cell || (pdata->wakeup_signal &&
 		    pdata->wakeup_signal(pdata))) {
 			res = mlxreg_hotplug_generate_netlink_event(priv, data,
@@ -726,8 +726,6 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 			priv->not_asserted = 0;
 			goto unmask_event;
 		}
-		if (!priv->after_probe)
-			return;
 	}
 
 	/* Handle topology and health configuration changes. */
