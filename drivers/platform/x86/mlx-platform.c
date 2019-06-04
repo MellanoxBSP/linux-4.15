@@ -26,6 +26,7 @@
 #define MLXPLAT_CPLD_LPC_REG_CPLD1_VER_OFFSET	0x00
 #define MLXPLAT_CPLD_LPC_REG_CPLD2_VER_OFFSET	0x01
 #define MLXPLAT_CPLD_LPC_REG_CPLD3_VER_OFFSET	0x02
+#define MLXPLAT_CPLD_LPC_REG_CPLD4_VER_OFFSET	0x03
 #define MLXPLAT_CPLD_LPC_REG_PG_EVENT_OFFSET    0x12
 #define MLXPLAT_CPLD_LPC_REG_RESET_CAUSE_OFFSET	0x1d
 #define MLXPLAT_CPLD_LPC_REG_RST_CAUSE1_OFFSET	0x1e
@@ -123,6 +124,16 @@
 #define MLXPLAT_CPLD_LPC_REG_FAB2_PWR_OFFSET	0xb8
 #define MLXPLAT_CPLD_LPC_REG_FAB3_PWR_OFFSET	0xb9
 #define MLXPLAT_CPLD_LPC_REG_CHAS_TYPE_OFFSET	0xbd
+#define MLXPLAT_CPLD_LPC_REG_WD_CLEAR_OFFSET	0xc7
+#define MLXPLAT_CPLD_LPC_REG_WD_CLEAR_WP_OFFSET	0xc8
+#define MLXPLAT_CPLD_LPC_REG_WD1_TMR_OFFSET	0xc9
+#define MLXPLAT_CPLD_LPC_REG_WD1_ACT_OFFSET	0xcb
+#define MLXPLAT_CPLD_LPC_REG_WD2_TMR_OFFSET	0xcd
+#define MLXPLAT_CPLD_LPC_REG_WD2_TLEFT_OFFSET	0xce
+#define MLXPLAT_CPLD_LPC_REG_WD2_ACT_OFFSET	0xcf
+#define MLXPLAT_CPLD_LPC_REG_WD3_TMR_OFFSET	0xd1
+#define MLXPLAT_CPLD_LPC_REG_WD3_TLEFT_OFFSET	0xd2
+#define MLXPLAT_CPLD_LPC_REG_WD3_ACT_OFFSET	0xd3
 #define MLXPLAT_CPLD_LPC_REG_PWM1_OFFSET	0xe3
 #define MLXPLAT_CPLD_LPC_REG_TACHO1_OFFSET	0xe4
 #define MLXPLAT_CPLD_LPC_REG_TACHO2_OFFSET	0xe5
@@ -1875,6 +1886,11 @@ static struct mlxreg_core_data mlxplat_mlxcpld_default_ng_led_data[] = {
 		.capability = MLXPLAT_CPLD_LPC_REG_FAN_DRW_CAP_OFFSET,
 		.bit = BIT(5),
 	},
+	{
+		.label = "uid:blue",
+		.reg = MLXPLAT_CPLD_LPC_REG_LED5_OFFSET,
+		.mask = MLXPLAT_CPLD_LED_LO_NIBBLE_MASK,
+	},
 };
 
 static struct mlxreg_core_platform_data mlxplat_default_ng_led_data = {
@@ -2605,6 +2621,12 @@ static struct mlxreg_core_data mlxplat_mlxcpld_default_ng_regs_io_data[] = {
 		.mode = 0444,
 	},
 	{
+		.label = "cpld4_version",
+		.reg = MLXPLAT_CPLD_LPC_REG_CPLD4_VER_OFFSET,
+		.bit = GENMASK(7, 0),
+		.mode = 0444,
+	},
+	{
 		.label = "reset_long_pb",
 		.reg = MLXPLAT_CPLD_LPC_REG_RESET_CAUSE_OFFSET,
 		.mask = GENMASK(7, 0) & ~BIT(0),
@@ -2693,7 +2715,7 @@ static struct mlxreg_core_data mlxplat_mlxcpld_default_ng_regs_io_data[] = {
 		.label = "fan_dir",
 		.reg = MLXPLAT_CPLD_LPC_REG_FAN_DIRECTION,
 		.bit = GENMASK(7, 0),
-		.mode = 0200,
+		.mode = 0444,
 	},
 };
 
@@ -2794,7 +2816,6 @@ static struct mlxreg_core_data mlxplat_mlxcpld_default_fan_data[] = {
 	},
 	{
 		.label = "conf",
-		.reg = MLXPLAT_CPLD_LPC_REG_TACHO12_OFFSET,
 		.capability = MLXPLAT_CPLD_LPC_REG_TACHO_SPEED_OFFSET,
 	},
 };
@@ -2887,6 +2908,7 @@ static bool mlxplat_mlxcpld_readable_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_CPLD1_VER_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_CPLD2_VER_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_CPLD3_VER_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_CPLD4_VER_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_RESET_CAUSE_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_RST_CAUSE1_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_RST_CAUSE2_OFFSET:
@@ -3009,6 +3031,7 @@ static bool mlxplat_mlxcpld_volatile_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_CPLD1_VER_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_CPLD2_VER_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_CPLD3_VER_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_CPLD4_VER_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_RESET_CAUSE_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_RST_CAUSE1_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_RST_CAUSE2_OFFSET:
@@ -3284,7 +3307,7 @@ static int __init mlxplat_dmi_msn201x_matched(const struct dmi_system_id *dmi)
 {
 	int i;
 
-	for (i = 0; i < MLXPLAT_CPLD_DEFAULT_GRP_NUM; i++) {
+	for (i = 0; i < ARRAY_SIZE(mlxplat_mux_data); i++) {
 		mlxplat_mux_data[i].values = mlxplat_msn21xx_channels;
 		mlxplat_mux_data[i].n_values =
 				ARRAY_SIZE(mlxplat_msn21xx_channels);
@@ -3574,30 +3597,10 @@ static int mlxplat_mlxcpld_verify_bus_topology(int *nr)
 	return 0;
 }
 
-static bool mlxplat_mlxcpld_wait_adapter(int nr, const char *name)
-{
-	struct i2c_adapter *adap;
-	bool ret = false;
-
-	adap = i2c_get_adapter(nr);
-	if (!adap)
-		return ret;
-
-	if (!name)
-		ret = true;
-	else if (!strncmp(adap->name, name, sizeof(adap->name)))
-		ret = true;
-
-	i2c_put_adapter(adap);
-
-	return ret;
-}
-
 static int __init mlxplat_init(void)
 {
 	struct mlxplat_priv *priv;
-	int i, j, nr, err, ready_cntr = 0;
-	bool ready;
+	int i, j, nr, err;
 
 	if (!dmi_check_system(mlxplat_dmi_table))
 		return -ENODEV;
@@ -3629,46 +3632,15 @@ static int __init mlxplat_init(void)
 		goto fail_alloc;
 	}
 
-	nr = MLXPLAT_CPLD_PHYS_ADAPTER_DEF_NR + mlxplat_hotplug->shift_nr;
-	do {
-		ready = mlxplat_mlxcpld_wait_adapter(nr, "i2c-mlxcpld");
-		if (!ready) {
-			msleep(100);
-			ready_cntr++;
-		}
-	} while (!ready && ready_cntr < MLXPLAT_CPLD_LPC_I2C_ADAP_READY_CNTR);
-
-	if (!ready)
-		dev_info(&mlxplat_dev->dev, "I2C adapter %d  is not ready.",
-			 nr);
-
 	for (i = 0; i < mlxplat_mux_array_size; i++) {
-		ready_cntr = 0;
-retry_mux:
 		priv->pdev_mux[i] = platform_device_register_resndata(
-						&mlxplat_dev->dev,
+						&priv->pdev_i2c->dev,
 						"i2c-mux-reg", i, NULL,
 						0, &mlxplat_mux_data[i],
 						sizeof(mlxplat_mux_data[i]));
 		if (IS_ERR(priv->pdev_mux[i])) {
 			err = PTR_ERR(priv->pdev_mux[i]);
 			goto fail_platform_mux_register;
-		}
-
-		nr = mlxplat_mux_data[i].base_nr;
-		do {
-			ready = mlxplat_mlxcpld_wait_adapter(nr, NULL);
-			if (!ready) {
-				msleep(100);
-				ready_cntr++;
-			}
-		} while (!ready && ready_cntr <
-			 MLXPLAT_CPLD_LPC_I2C_ADAP_READY_CNTR);
-
-		if (!ready) {
-			dev_info(&mlxplat_dev->dev, "I2C adapter %d is not ready.",
-				 nr);
-			goto retry_mux;
 		}
 	}
 
