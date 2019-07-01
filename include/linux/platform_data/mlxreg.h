@@ -37,6 +37,8 @@
 #define MLXREG_CORE_LABEL_MAX_SIZE	32
 #define MLXREG_CORE_WD_FEATURE_NOWAYOUT		BIT(0)
 #define MLXREG_CORE_WD_FEATURE_START_AT_BOOT	BIT(1)
+#define MLXREG_CORE_I2C_DEF_FREQUENCY_400KHZ	GENMASK(3, 0)
+#define MLXREG_CORE_I2C_DEF_FREQUENCY_1M	BIT(2)
 
 /**
  * enum mlxreg_wdt_type - type of HW watchdog
@@ -151,6 +153,7 @@ struct mlxreg_core_platform_data {
  * @mask_low: low aggregation interrupt common mask;
  * @deferred_nr: I2C adapter number must be exist prior probing execution;
  * @shift_nr: I2C adapter numbers must be incremented by this value;
+ * @frequency: device default frequency code;
  * @deferred_irq_set: deferred interrupt setting configuration flag;
  * @sk: netlink unicast socket;
  * @presence: callback for device physical presence verification;
@@ -171,6 +174,7 @@ struct mlxreg_core_hotplug_platform_data {
 	u32 mask_low;
 	int deferred_nr;
 	int shift_nr;
+	u8 frequency;
 	bool deferred_irq_set;
 	struct sock *sk;
 	bool (*presence)(struct mlxreg_core_hotplug_platform_data *data);

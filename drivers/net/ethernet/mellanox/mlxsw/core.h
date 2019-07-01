@@ -61,6 +61,8 @@ unsigned int mlxsw_core_max_ports(const struct mlxsw_core *mlxsw_core);
 
 void *mlxsw_core_driver_priv(struct mlxsw_core *mlxsw_core);
 
+bool mlxsw_core_res_query_enabled(const struct mlxsw_core *mlxsw_core);
+
 int mlxsw_core_driver_register(struct mlxsw_driver *mlxsw_driver);
 void mlxsw_core_driver_unregister(struct mlxsw_driver *mlxsw_driver);
 
@@ -211,6 +213,8 @@ enum devlink_port_type mlxsw_core_port_type_get(struct mlxsw_core *mlxsw_core,
 int mlxsw_core_schedule_dw(struct delayed_work *dwork, unsigned long delay);
 bool mlxsw_core_schedule_work(struct work_struct *work);
 void mlxsw_core_flush_owq(void);
+int mlxsw_core_resources_query(struct mlxsw_core *mlxsw_core, char *mbox,
+			       struct mlxsw_res *res);
 
 #define MLXSW_CONFIG_PROFILE_SWID_COUNT 8
 
@@ -308,8 +312,10 @@ struct mlxsw_driver {
 				       u32 *p_cur, u32 *p_max);
 	void (*txhdr_construct)(struct sk_buff *skb,
 				const struct mlxsw_tx_info *tx_info);
+	int (*resources_register)(struct mlxsw_core *mlxsw_core);
 	u8 txhdr_len;
 	const struct mlxsw_config_profile *profile;
+	bool res_query_enabled;
 };
 
 bool mlxsw_core_res_valid(struct mlxsw_core *mlxsw_core,
@@ -357,6 +363,7 @@ struct mlxsw_bus_info {
 	struct mlxsw_fw_rev fw_rev;
 	u8 vsd[MLXSW_CMD_BOARDINFO_VSD_LEN];
 	u8 psid[MLXSW_CMD_BOARDINFO_PSID_LEN];
+	u8 low_frequency;
 };
 
 struct mlxsw_hwmon;
@@ -375,6 +382,10 @@ static inline int mlxsw_hwmon_init(struct mlxsw_core *mlxsw_core,
 				   struct mlxsw_hwmon **p_hwmon)
 {
 	return 0;
+}
+
+static inline void mlxsw_hwmon_fini(struct mlxsw_hwmon *mlxsw_hwmon)
+{
 }
 
 #endif

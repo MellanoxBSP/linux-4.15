@@ -153,6 +153,12 @@ void *mlxsw_core_driver_priv(struct mlxsw_core *mlxsw_core)
 }
 EXPORT_SYMBOL(mlxsw_core_driver_priv);
 
+bool mlxsw_core_res_query_enabled(const struct mlxsw_core *mlxsw_core)
+{
+	return mlxsw_core->driver->res_query_enabled;
+}
+EXPORT_SYMBOL(mlxsw_core_res_query_enabled);
+
 struct mlxsw_rx_listener_item {
 	struct list_head list;
 	struct mlxsw_rx_listener rxl;
@@ -986,6 +992,7 @@ int mlxsw_core_bus_device_register(const struct mlxsw_bus_info *mlxsw_bus_info,
 	struct mlxsw_core *mlxsw_core;
 	struct mlxsw_driver *mlxsw_driver;
 	struct devlink *devlink;
+	struct mlxsw_res *res;
 	size_t alloc_size;
 	int err;
 
@@ -1007,10 +1014,17 @@ int mlxsw_core_bus_device_register(const struct mlxsw_bus_info *mlxsw_bus_info,
 	mlxsw_core->bus_priv = bus_priv;
 	mlxsw_core->bus_info = mlxsw_bus_info;
 
+	res = mlxsw_driver->res_query_enabled ? &mlxsw_core->res : NULL;
 	err = mlxsw_bus->init(bus_priv, mlxsw_core, mlxsw_driver->profile,
 			      &mlxsw_core->res);
 	if (err)
 		goto err_bus_init;
+
+	if (mlxsw_driver->resources_register) {
+		err = mlxsw_driver->resources_register(mlxsw_core);
+		if (err)
+			goto err_register_resources;
+	}
 
 	err = mlxsw_ports_init(mlxsw_core);
 	if (err)
@@ -1056,6 +1070,7 @@ int mlxsw_core_bus_device_register(const struct mlxsw_bus_info *mlxsw_bus_info,
 err_driver_init:
 	mlxsw_thermal_fini(mlxsw_core->thermal);
 err_thermal_init:
+	mlxsw_hwmon_fini(mlxsw_core->hwmon);
 err_hwmon_init:
 	devlink_unregister(devlink);
 err_devlink_register:
@@ -1065,6 +1080,7 @@ err_emad_init:
 err_alloc_lag_mapping:
 	mlxsw_ports_fini(mlxsw_core);
 err_ports_init:
+err_register_resources:
 	mlxsw_bus->fini(bus_priv);
 err_bus_init:
 	devlink_free(devlink);
@@ -1082,6 +1098,7 @@ void mlxsw_core_bus_device_unregister(struct mlxsw_core *mlxsw_core)
 	if (mlxsw_core->driver->fini)
 		mlxsw_core->driver->fini(mlxsw_core);
 	mlxsw_thermal_fini(mlxsw_core->thermal);
+	mlxsw_hwmon_fini(mlxsw_core->hwmon);
 	devlink_unregister(devlink);
 	mlxsw_emad_fini(mlxsw_core);
 	kfree(mlxsw_core->lag.mapping);
@@ -1790,6 +1807,43 @@ void mlxsw_core_flush_owq(void)
 	flush_workqueue(mlxsw_owq);
 }
 EXPORT_SYMBOL(mlxsw_core_flush_owq);
+
+int mlxsw_core_resources_query(struct mlxsw_core *mlxsw_core, char *mbox,
+			       struct mlxsw_res *res)
+{
+	int index, i;
+	u64 data;
+	u16 id;
+	int err;
+
+	if (!res)
+		return 0;
+
+	mlxsw_cmd_mbox_zero(mbox);
+
+	for (index = 0; index < MLXSW_CMD_QUERY_RESOURCES_MAX_QUERIES;
+	     index++) {
+		err = mlxsw_cmd_query_resources(mlxsw_core, mbox, index);
+		if (err)
+			return err;
+
+		for (i = 0; i < MLXSW_CMD_QUERY_RESOURCES_PER_QUERY; i++) {
+			id = mlxsw_cmd_mbox_query_resource_id_get(mbox, i);
+			data = mlxsw_cmd_mbox_query_resource_data_get(mbox, i);
+
+			if (id == MLXSW_CMD_QUERY_RESOURCES_TABLE_END_ID)
+				return 0;
+
+			mlxsw_res_parse(res, id, data);
+		}
+	}
+
+	/* If after MLXSW_RESOURCES_QUERY_MAX_QUERIES we still didn't get
+	 * MLXSW_RESOURCES_TABLE_END_ID, something went bad in the FW.
+	 */
+	return -EIO;
+}
+EXPORT_SYMBOL(mlxsw_core_resources_query);
 
 static int __init mlxsw_core_module_init(void)
 {

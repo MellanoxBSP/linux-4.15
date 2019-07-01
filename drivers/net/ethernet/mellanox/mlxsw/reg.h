@@ -1,44 +1,10 @@
-/*
- * drivers/net/ethernet/mellanox/mlxsw/reg.h
- * Copyright (c) 2015-2017 Mellanox Technologies. All rights reserved.
- * Copyright (c) 2015-2016 Ido Schimmel <idosch@mellanox.com>
- * Copyright (c) 2015 Elad Raz <eladr@mellanox.com>
- * Copyright (c) 2015-2017 Jiri Pirko <jiri@mellanox.com>
- * Copyright (c) 2016 Yotam Gigi <yotamg@mellanox.com>
- * Copyright (c) 2017 Petr Machata <petrm@mellanox.com>
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the names of the copyright holders nor the names of its
- *    contributors may be used to endorse or promote products derived from
- *    this software without specific prior written permission.
- *
- * Alternatively, this software may be distributed under the terms of the
- * GNU General Public License ("GPL") version 2 as published by the Free
- * Software Foundation.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
+/* SPDX-License-Identifier: BSD-3-Clause OR GPL-2.0 */
+/* Copyright (c) 2015-2018 Mellanox Technologies. All rights reserved */
 
 #ifndef _MLXSW_REG_H
 #define _MLXSW_REG_H
 
+#include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/bitops.h>
 #include <linux/if_vlan.h>
@@ -6486,6 +6452,35 @@ static inline void mlxsw_reg_mfsl_unpack(char *payload, u8 tacho,
 		*p_tach_max = mlxsw_reg_mfsl_tach_max_get(payload);
 }
 
+/* FORE - Fan Out of Range Event Register
+ * --------------------------------------
+ * This register reports the status of the controlled fans compared to the
+ * range defined by the MFSL register.
+ */
+#define MLXSW_REG_FORE_ID 0x9007
+#define MLXSW_REG_FORE_LEN 0x0C
+
+MLXSW_REG_DEFINE(fore, MLXSW_REG_FORE_ID, MLXSW_REG_FORE_LEN);
+
+/* fan_under_limit
+ * Fan speed is below the low limit defined in MFSL register. Each bit relates
+ * to a single tachometer and indicates the specific tachometer reading is
+ * below the threshold.
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, fore, fan_under_limit, 0x00, 16, 10);
+
+static inline void mlxsw_reg_fore_unpack(char *payload, u8 tacho,
+					 bool *fault)
+{
+	u16 limit;
+
+	if (fault) {
+		limit = mlxsw_reg_fore_fan_under_limit_get(payload);
+		*fault = limit & BIT(tacho);
+	}
+}
+
 /* MTCAP - Management Temperature Capabilities
  * -------------------------------------------
  * This register exposes the capabilities of the device and
@@ -6514,16 +6509,21 @@ MLXSW_ITEM32(reg, mtcap, sensor_count, 0x00, 0, 7);
 
 MLXSW_REG_DEFINE(mtmp, MLXSW_REG_MTMP_ID, MLXSW_REG_MTMP_LEN);
 
+#define MLXSW_REG_MTMP_MODULE_INDEX_MIN 64
+#define MLXSW_REG_MTMP_GBOX_INDEX_MIN 256
 /* reg_mtmp_sensor_index
  * Sensors index to access.
  * 64-127 of sensor_index are mapped to the SFP+/QSFP modules sequentially
  * (module 0 is mapped to sensor_index 64).
  * Access: Index
  */
-MLXSW_ITEM32(reg, mtmp, sensor_index, 0x00, 0, 7);
+MLXSW_ITEM32(reg, mtmp, sensor_index, 0x00, 0, 12);
 
 /* Convert to milli degrees Celsius */
-#define MLXSW_REG_MTMP_TEMP_TO_MC(val) (val * 125)
+#define MLXSW_REG_MTMP_TEMP_TO_MC(val) ({ typeof(val) v_ = (val); \
+					  ((v_) >= 0) ? ((v_) * 125) : \
+					  ((s16)((GENMASK(15, 0) + (v_) + 1) \
+					   * 125)); })
 
 /* reg_mtmp_temperature
  * Temperature reading from the sensor. Reading is in 0.125 Celsius
@@ -6582,7 +6582,7 @@ MLXSW_ITEM32(reg, mtmp, temperature_threshold_lo, 0x10, 0, 16);
  */
 MLXSW_ITEM_BUF(reg, mtmp, sensor_name, 0x18, MLXSW_REG_MTMP_SENSOR_NAME_SIZE);
 
-static inline void mlxsw_reg_mtmp_pack(char *payload, u8 sensor_index,
+static inline void mlxsw_reg_mtmp_pack(char *payload, u16 sensor_index,
 				       bool max_temp_enable,
 				       bool max_temp_reset)
 {
@@ -6594,11 +6594,10 @@ static inline void mlxsw_reg_mtmp_pack(char *payload, u8 sensor_index,
 						    MLXSW_REG_MTMP_THRESH_HI);
 }
 
-static inline void mlxsw_reg_mtmp_unpack(char *payload, unsigned int *p_temp,
-					 unsigned int *p_max_temp,
-					 char *sensor_name)
+static inline void mlxsw_reg_mtmp_unpack(char *payload, int *p_temp,
+					 int *p_max_temp, char *sensor_name)
 {
-	u16 temp;
+	s16 temp;
 
 	if (p_temp) {
 		temp = mlxsw_reg_mtmp_temperature_get(payload);
@@ -6610,6 +6609,80 @@ static inline void mlxsw_reg_mtmp_unpack(char *payload, unsigned int *p_temp,
 	}
 	if (sensor_name)
 		mlxsw_reg_mtmp_sensor_name_memcpy_from(payload, sensor_name);
+}
+
+/* MTBR - Management Temperature Bulk Register
+ * -------------------------------------------
+ * This register is used for bulk temperature reading.
+ */
+#define MLXSW_REG_MTBR_ID 0x900F
+#define MLXSW_REG_MTBR_BASE_LEN 0x10 /* base length, without records */
+#define MLXSW_REG_MTBR_REC_LEN 0x04 /* record length */
+#define MLXSW_REG_MTBR_REC_MAX_COUNT 47 /* firmware limitation */
+#define MLXSW_REG_MTBR_LEN (MLXSW_REG_MTBR_BASE_LEN +	\
+			    MLXSW_REG_MTBR_REC_LEN *	\
+			    MLXSW_REG_MTBR_REC_MAX_COUNT)
+
+MLXSW_REG_DEFINE(mtbr, MLXSW_REG_MTBR_ID, MLXSW_REG_MTBR_LEN);
+
+/* reg_mtbr_base_sensor_index
+ * Base sensors index to access (0 - ASIC sensor, 1-63 - ambient sensors,
+ * 64-127 are mapped to the SFP+/QSFP modules sequentially).
+ * Access: Index
+ */
+MLXSW_ITEM32(reg, mtbr, base_sensor_index, 0x00, 0, 12);
+
+/* reg_mtbr_num_rec
+ * Request: Number of records to read
+ * Response: Number of records read
+ * See above description for more details.
+ * Range 1..255
+ * Access: RW
+ */
+MLXSW_ITEM32(reg, mtbr, num_rec, 0x04, 0, 8);
+
+/* reg_mtbr_rec_max_temp
+ * The highest measured temperature from the sensor.
+ * When the bit mte is cleared, the field max_temperature is reserved.
+ * Access: RO
+ */
+MLXSW_ITEM32_INDEXED(reg, mtbr, rec_max_temp, MLXSW_REG_MTBR_BASE_LEN, 16,
+		     16, MLXSW_REG_MTBR_REC_LEN, 0x00, false);
+
+/* reg_mtbr_rec_temp
+ * Temperature reading from the sensor. Reading is in 0..125 Celsius
+ * degrees units.
+ * Access: RO
+ */
+MLXSW_ITEM32_INDEXED(reg, mtbr, rec_temp, MLXSW_REG_MTBR_BASE_LEN, 0, 16,
+		     MLXSW_REG_MTBR_REC_LEN, 0x00, false);
+
+static inline void mlxsw_reg_mtbr_pack(char *payload, u16 base_sensor_index,
+				       u8 num_rec)
+{
+	MLXSW_REG_ZERO(mtbr, payload);
+	mlxsw_reg_mtbr_base_sensor_index_set(payload, base_sensor_index);
+	mlxsw_reg_mtbr_num_rec_set(payload, num_rec);
+}
+
+/* Error codes from temperatute reading */
+enum mlxsw_reg_mtbr_temp_status {
+	MLXSW_REG_MTBR_NO_CONN		= 0x8000,
+	MLXSW_REG_MTBR_NO_TEMP_SENS	= 0x8001,
+	MLXSW_REG_MTBR_INDEX_NA		= 0x8002,
+	MLXSW_REG_MTBR_BAD_SENS_INFO	= 0x8003,
+};
+
+/* Base index for reading modules temperature */
+#define MLXSW_REG_MTBR_BASE_MODULE_INDEX 64
+
+static inline void mlxsw_reg_mtbr_temp_unpack(char *payload, int rec_ind,
+					      u16 *p_temp, u16 *p_max_temp)
+{
+	if (p_temp)
+		*p_temp = mlxsw_reg_mtbr_rec_temp_get(payload, rec_ind);
+	if (p_max_temp)
+		*p_max_temp = mlxsw_reg_mtbr_rec_max_temp_get(payload, rec_ind);
 }
 
 /* MCIA - Management Cable Info Access
@@ -6666,13 +6739,41 @@ MLXSW_ITEM32(reg, mcia, device_address, 0x04, 0, 16);
  */
 MLXSW_ITEM32(reg, mcia, size, 0x08, 0, 16);
 
-#define MLXSW_SP_REG_MCIA_EEPROM_SIZE 48
+#define MLXSW_REG_MCIA_EEPROM_PAGE_LENGTH	256
+#define MLXSW_REG_MCIA_EEPROM_SIZE		48
+#define MLXSW_REG_MCIA_I2C_ADDR_LOW		0x50
+#define MLXSW_REG_MCIA_I2C_ADDR_HIGH		0x51
+#define MLXSW_REG_MCIA_PAGE0_LO_OFF		0xa0
+#define MLXSW_REG_MCIA_TH_ITEM_SIZE		2
+#define MLXSW_REG_MCIA_TH_PAGE_NUM		3
+#define MLXSW_REG_MCIA_PAGE0_LO			0
+#define MLXSW_REG_MCIA_TH_PAGE_OFF		0x80
+
+enum mlxsw_reg_mcia_eeprom_module_info_rev_id {
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_REV_ID_UNSPC	= 0x00,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_REV_ID_8436	= 0x01,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_REV_ID_8636	= 0x03,
+};
+
+enum mlxsw_reg_mcia_eeprom_module_info_id {
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_ID_SFP	= 0x03,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_ID_QSFP	= 0x0C,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_ID_QSFP_PLUS	= 0x0D,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_ID_QSFP28	= 0x11,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_ID_QSFP_DD	= 0x18,
+};
+
+enum mlxsw_reg_mcia_eeprom_module_info {
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_ID,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_REV_ID,
+	MLXSW_REG_MCIA_EEPROM_MODULE_INFO_SIZE,
+};
 
 /* reg_mcia_eeprom
  * Bytes to read/write.
  * Access: RW
  */
-MLXSW_ITEM_BUF(reg, mcia, eeprom, 0x10, MLXSW_SP_REG_MCIA_EEPROM_SIZE);
+MLXSW_ITEM_BUF(reg, mcia, eeprom, 0x10, MLXSW_REG_MCIA_EEPROM_SIZE);
 
 static inline void mlxsw_reg_mcia_pack(char *payload, u8 module, u8 lock,
 				       u8 page_number, u16 device_addr,
@@ -6796,6 +6897,84 @@ static inline void mlxsw_reg_mpar_pack(char *payload, u8 local_port,
 	mlxsw_reg_mpar_enable_set(payload, enable);
 	mlxsw_reg_mpar_i_e_set(payload, i_e);
 	mlxsw_reg_mpar_pa_id_set(payload, pa_id);
+}
+
+/* MGIR - Management General Information Register
+ * ----------------------------------------------
+ * MGIR register allows software to query the hardware and firmware general
+ * information.
+ */
+#define MLXSW_REG_MGIR_ID 0x9020
+#define MLXSW_REG_MGIR_LEN 0x9C
+
+MLXSW_REG_DEFINE(mgir, MLXSW_REG_MGIR_ID, MLXSW_REG_MGIR_LEN);
+
+/* reg_mgir_hw_info_device_hw_revision
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgir, hw_info_device_hw_revision, 0x0, 16, 16);
+
+#define MLXSW_REG_MGIR_FW_INFO_PSID_SIZE 16
+
+/* reg_mgir_fw_info_psid
+ * PSID (ASCII string).
+ * Access: RO
+ */
+MLXSW_ITEM_BUF(reg, mgir, fw_info_psid, 0x30, MLXSW_REG_MGIR_FW_INFO_PSID_SIZE);
+
+/* reg_mgir_fw_info_extended_major
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgir, fw_info_extended_major, 0x44, 0, 32);
+
+/* reg_mgir_fw_info_extended_minor
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgir, fw_info_extended_minor, 0x48, 0, 32);
+
+/* reg_mgir_fw_info_extended_sub_minor
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgir, fw_info_extended_sub_minor, 0x4C, 0, 32);
+
+static inline void mlxsw_reg_mgir_pack(char *payload)
+{
+	MLXSW_REG_ZERO(mgir, payload);
+}
+
+static inline void
+mlxsw_reg_mgir_unpack(char *payload, u32 *hw_rev, char *fw_info_psid,
+		      u32 *fw_major, u32 *fw_minor, u32 *fw_sub_minor)
+{
+	*hw_rev = mlxsw_reg_mgir_hw_info_device_hw_revision_get(payload);
+	mlxsw_reg_mgir_fw_info_psid_memcpy_from(payload, fw_info_psid);
+	*fw_major = mlxsw_reg_mgir_fw_info_extended_major_get(payload);
+	*fw_minor = mlxsw_reg_mgir_fw_info_extended_minor_get(payload);
+	*fw_sub_minor = mlxsw_reg_mgir_fw_info_extended_sub_minor_get(payload);
+}
+
+/* MRSR - Management Reset and Shutdown Register
+ * ---------------------------------------------
+ * MRSR register is used to reset or shutdown the switch or
+ * the entire system (when applicable).
+ */
+#define MLXSW_REG_MRSR_ID 0x9023
+#define MLXSW_REG_MRSR_LEN 0x08
+
+MLXSW_REG_DEFINE(mrsr, MLXSW_REG_MRSR_ID, MLXSW_REG_MRSR_LEN);
+
+/* reg_mrsr_command
+ * Reset/shutdown command
+ * 0 - do nothing
+ * 1 - software reset
+ * Access: WO
+ */
+MLXSW_ITEM32(reg, mrsr, command, 0x00, 0, 4);
+
+static inline void mlxsw_reg_mrsr_pack(char *payload)
+{
+	MLXSW_REG_ZERO(mrsr, payload);
+	mlxsw_reg_mrsr_command_set(payload, 1);
 }
 
 /* MLCR - Management LED Control Register
@@ -7139,6 +7318,57 @@ MLXSW_ITEM64(reg, mgpc, byte_counter, 0x08, 0, 64);
  * Access: RW
  */
 MLXSW_ITEM64(reg, mgpc, packet_counter, 0x10, 0, 64);
+
+/* MGPIR - Management General Peripheral Information Register
+ * ----------------------------------------------------------
+ * MGPIR register allows software to query the hardware and
+ * firmware general information of peripheral entities.
+ */
+#define MLXSW_REG_MGPIR_ID 0x9100
+#define MLXSW_REG_MGPIR_LEN 0xA0
+
+MLXSW_REG_DEFINE(mgpir, MLXSW_REG_MGPIR_ID, MLXSW_REG_MGPIR_LEN);
+
+enum mlxsw_reg_mgpir_device_type {
+	MLXSW_REG_MGPIR_DEVICE_TYPE_NONE,
+	MLXSW_REG_MGPIR_DEVICE_TYPE_GEARBOX_DIE,
+};
+
+/* device_type
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgpir, device_type, 0x00, 24, 4);
+
+/* devices_per_flash
+ * Number of devices of device_type per flash (can be shared by few devices).
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgpir, devices_per_flash, 0x00, 16, 8);
+
+/* num_of_devices
+ * Number of devices of device_type.
+ * Access: RO
+ */
+MLXSW_ITEM32(reg, mgpir, num_of_devices, 0x00, 0, 8);
+
+static inline void mlxsw_reg_mgpir_pack(char *payload)
+{
+	MLXSW_REG_ZERO(mgpir, payload);
+}
+
+static inline void
+mlxsw_reg_mgpir_unpack(char *payload, u8 *num_of_devices,
+		       enum mlxsw_reg_mgpir_device_type *device_type,
+		       u8 *devices_per_flash)
+{
+	if (num_of_devices)
+		*num_of_devices = mlxsw_reg_mgpir_num_of_devices_get(payload);
+	if (device_type)
+		*device_type = mlxsw_reg_mgpir_device_type_get(payload);
+	if (devices_per_flash)
+		*devices_per_flash =
+				mlxsw_reg_mgpir_devices_per_flash_get(payload);
+}
 
 static inline void mlxsw_reg_mgpc_pack(char *payload, u32 counter_index,
 				       enum mlxsw_reg_mgpc_opcode opcode,
@@ -7656,17 +7886,22 @@ static const struct mlxsw_reg_info *mlxsw_reg_infos[] = {
 	MLXSW_REG(mfsc),
 	MLXSW_REG(mfsm),
 	MLXSW_REG(mfsl),
+	MLXSW_REG(fore),
 	MLXSW_REG(mtcap),
 	MLXSW_REG(mtmp),
+	MLXSW_REG(mtbr),
 	MLXSW_REG(mcia),
 	MLXSW_REG(mpat),
 	MLXSW_REG(mpar),
+	MLXSW_REG(mgir),
+	MLXSW_REG(mrsr),
 	MLXSW_REG(mlcr),
 	MLXSW_REG(mpsc),
 	MLXSW_REG(mcqi),
 	MLXSW_REG(mcc),
 	MLXSW_REG(mcda),
 	MLXSW_REG(mgpc),
+	MLXSW_REG(mgpir),
 	MLXSW_REG(tigcr),
 	MLXSW_REG(sbpr),
 	MLXSW_REG(sbcm),
