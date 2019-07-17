@@ -3425,7 +3425,7 @@ static const struct dmi_system_id mlxplat_dmi_table[] __initconst = {
 	{
 		.callback = mlxplat_dmi_comex_matched,
 		.matches = {
-			DMI_MATCH(DMI_BOARD_NAME, "VMOD0008"),
+			DMI_MATCH(DMI_BOARD_NAME, "VMOD0009"),
 		},
 	},
 	{
