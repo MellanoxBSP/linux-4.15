@@ -3071,6 +3071,7 @@ static bool mlxplat_mlxcpld_writeable_reg(struct device *dev, unsigned int reg)
 	case MLXPLAT_CPLD_LPC_REG_PWM1_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_PWM_CONTROL_OFFSET:
 	case MLXPLAT_CPLD_LPC_REG_PG_EVENT_OFFSET:
+	case MLXPLAT_CPLD_LPC_REG_AGGRHA2_MASK_OFFSET:
 		return true;
 	}
 	return false;
@@ -3359,6 +3360,7 @@ static const struct reg_default mlxplat_mlxcpld_regmap_default[] = {
 	{ MLXPLAT_CPLD_LPC_REG_FAB1_EVENT_OFFSET, 0x00 },
 	{ MLXPLAT_CPLD_LPC_REG_FAB2_EVENT_OFFSET, 0x00 },
 	{ MLXPLAT_CPLD_LPC_REG_FAB3_EVENT_OFFSET, 0x00 },
+	{ MLXPLAT_CPLD_LPC_REG_AGGRHA2_MASK_OFFSET, GENMASK(4, 0) },
 };
 
 static const struct reg_default mlxplat_mlxcpld_regmap_ng[] = {
