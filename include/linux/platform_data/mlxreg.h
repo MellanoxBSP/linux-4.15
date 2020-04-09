@@ -82,6 +82,7 @@ struct mlxreg_hotplug_device {
  * @hpdev - hotplug device data;
  * @health_cntr: dynamic device health indication counter;
  * @attached: true if device has been attached after good health indication;
+ * @regnum: number of registers occupied by multi-register attribute;
  */
 struct mlxreg_core_data {
 	char label[MLXREG_CORE_LABEL_MAX_SIZE];
@@ -94,6 +95,7 @@ struct mlxreg_core_data {
 	struct mlxreg_hotplug_device hpdev;
 	u8 health_cntr;
 	bool attached;
+	u8 regnum;
 };
 
 /**
