@@ -2970,7 +2970,7 @@ static struct mlxreg_core_data mlxplat_mlxcpld_modular_regs_io_data[] = {
 		.mode = 0200,
 	},
 	{
-		.label = "reste_other_cpu",
+		.label = "reset_other_cpu",
 		.reg = MLXPLAT_CPLD_LPC_REG_HA2_OFFSET,
 		.mask = GENMASK(7, 0) & ~BIT(7),
 		.mode = 0200,
