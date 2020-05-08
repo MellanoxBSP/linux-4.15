@@ -22,6 +22,7 @@
 #define MLXREG_LED_AMBER_SOLID		0x09 /* Solid amber */
 #define MLXREG_LED_BLINK_3HZ		167 /* ~167 msec off/on - HW support */
 #define MLXREG_LED_BLINK_6HZ		83 /* ~83 msec off/on - HW support */
+#define MLXREG_LED_CAPABILITY_CLEAR	GENMASK(31, 8) /* Clear mask */
 
 /**
  * struct mlxreg_led_data - led control data:
@@ -206,6 +207,12 @@ static int mlxreg_led_config(struct mlxreg_led_priv_data *priv)
 			}
 			if (!(regval & data->bit))
 				continue;
+			/*
+			 * Field "bit" can contain one capability bit in 0 byte
+			 * and offset bit in 1-3 bytes. Clear capability bit and
+			 * keep only offset bit.
+			 */
+			data->bit &= MLXREG_LED_CAPABILITY_CLEAR;
 		}
 
 		led_cdev = &led_data->led_cdev;
