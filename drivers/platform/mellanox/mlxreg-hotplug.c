@@ -141,7 +141,7 @@ static void mlxreg_hotplug_receive_nl_msg(struct sk_buff *skb)
 	struct mlxreg_hotplug_priv_data *priv;
 	struct nlmsghdr *nlh;
 	u16 nlmsg_type;
-	u32 devnum;
+	u32 devnum = 0;
 	u32 *p_mod_id;
 	int nr;
 
@@ -1043,7 +1043,7 @@ static int mlxreg_hotplug_remove(struct platform_device *pdev)
 	struct mlxreg_hotplug_priv_data *priv = dev_get_drvdata(&pdev->dev);
 
 	if (!list_empty(&mlxreg_hotplug_list.list))
-		list_del_rcu(&mlxreg_hotplug_list.list);
+		list_del_rcu(&priv->list);
 
 	mlxreg_hotplug_nl_release_once();
 
