@@ -747,7 +747,7 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 		if ((priv->not_asserted == MLXREG_HOTPLUG_NOT_ASSERT) ||
 		    (pdata->presence && !pdata->presence(pdata)) ||
 		    (pdata->wakeup_signal && !pdata->wakeup_signal(pdata) &&
-		     priv->after_probe)) {
+		     priv->after_probe) || !priv->after_probe) {
 			priv->not_asserted = 0;
 			goto unmask_event;
 		}
@@ -767,9 +767,6 @@ static void mlxreg_hotplug_work_handler(struct work_struct *work)
 				pdata->wakeup_signal_clear(pdata);
 		}
 	}
-
-	if (!priv->after_probe)
-		goto unmask_event;
 
 	if (!pdata->cell && !changed)
 		priv->not_asserted++;
